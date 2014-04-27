@@ -14,20 +14,24 @@ class Parser:
     """
 
     states = (
-        ('description','exclusive'),
-
+        ('description', 'exclusive'),
+        ('directive', 'exclusive'),
+        ('text', 'exclusive'),
         )
 
     tokens = (
+        'PLAN',
         'OK',
         'NOT',
         'NUMBER',
         'TEXT',
-        'DIRECTIVE',
+        'HASH',
+        'TODO',
+        'SKIP',
         )
 
     # Initial Tokens
-    #t_PLAN = r'1..\d+'
+    t_PLAN = r'1..\d+'
     def t_OK(self, t):
         r'ok'
         self.lexer.begin('description')
@@ -35,15 +39,20 @@ class Parser:
 
     t_NOT = r'not'
 
+    def t_HASH(self, t):
+        r'\#'
+        self.lexer.begin('text')
+        return t
+
     t_ignore = ' \t\r\n'
 
     def t_error(self, t):
         print("Illegal character '%s'" % t.value[0])
         t.lexer.skip(1)
 
-
+    # Description Tokens
     def t_description_NUMBER(self, t):
-        r"""\s+\d+\s+"""
+        r'\s+\d+\s+'
         try:
             t.value = int(t.value)
         except ValueError:
@@ -52,30 +61,76 @@ class Parser:
         return t
     
     t_description_TEXT = r'[^#^\d][^#]+'
-    t_description_DIRECTIVE = r'\#'
+
+    def t_description_HASH(self, t):
+        r'\#'
+        self.lexer.begin('directive')
+        return t
+
     t_description_ignore = '\r\n'
 
     def t_description_error(self, t):
         print("Illegal character '%s' in state description" % t.value[0])
         t.lexer.skip(1)
 
-    #t_DIRECTIVE_SEP = r'#'
-    #t_TODO = r'TODO'
-    #t_SKIP = r'SKIP'
+    # Directive Tokens
+    def t_directive_TODO(self, t):
+        r'\s*[Tt][Oo][Dd][Oo]\s*'
+        self.lexer.begin('text')
+        return t
 
+    def t_directive_SKIP(self, t):
+        r'\s*[Ss][Kk][Ii][Pp]\s*'
+        self.lexer.begin('text')
+        return t
+
+    t_directive_ignore = '\r\n'
+
+    def t_directive_error(self, t):
+        print("Illegal character '%s' in state description" % t.value[0])
+        t.lexer.skip(1)
+
+    # Text tokens
+    t_text_TEXT = "[^\r^\n]+"
+
+    t_text_ignore = '\r\n'
+
+    def t_text_error(self, t):
+        print("Illegal character '%s' in state description" % t.value[0])
+        t.lexer.skip(1)
+
+    # Grammar
     def p_tap(self, p):
-        """tap : ok number description"""
+        """tap : plan
+               | diagnostic
+               | test_line
+               | """
+
+    def p_plan(self, p):
+        """plan : PLAN"""
+
+    def p_plan_diagnostic(self, p):
+        """plan : PLAN diagnostic"""
+
+    def p_diagnostic(self, p):
+        """diagnostic : HASH TEXT"""
+
+    def p_test_line(self, p):
+        """test_line : ok number description directive"""
         print("tap", p[1], p[2], p[3])
-        p[0] = p[1]
+        p[0] = { 'ok' : p[1],
+                 'number' : p[2],
+                 'description' : p[3],
+                 'directive' : p[4]['directive'],
+                 'directive_description' : p[4]['description'],
+                 }
 
     def p_ok(self, p):
         """ok : OK"""
-        print("an ok")
         p[0] = True
 
     def p_not_ok(self, p):
         """ok : NOT OK"""
-        print("An not ok")
         p[0] = False
 
     def p_number(self, p):
@@ -84,7 +139,6 @@ class Parser:
 
     def p_no_number(self, p):
         """number : """
-        self.lexer.begin('description')
         p[0] = 1
 
     def p_description(self, p):
@@ -94,6 +148,15 @@ class Parser:
     def p_no_description(self, p):
         """description : """
         p[0] = ""
+
+    def p_directive(self, p):
+        """directive : HASH TODO description
+                     | HASH SKIP description"""
+        p[0] = { 'directive' : p[2], 'description' : p[3] }
+
+    def p_no_directive(self, p):
+        """directive : """
+        p[0] = { 'directive' : None, 'description' : '' }
 
     def p_error(self, p):
         print("Syntax error")
@@ -109,11 +172,18 @@ class Parser:
         self.not_ok = 0
 
         for line in f:
-            print("parsing:'\n%s'" % line)
             self.lexer.begin('INITIAL')
             self.parser.parse(line)
 
 if __name__ == '__main__':
-    f = io.StringIO("ok 1\nnot ok\nok 3 Happy")
+    str = "1..4\n" \
+        "ok 1\n \n" \
+        "not ok\n" \
+        "ok 3 Happy # TODO\n" \
+        "# Well, this far, so good!"
+    print("to parse:\n--------\n")
+    print(str)
+    print("-------\n")
+    f = io.StringIO(str)
     p = Parser(f)
     p.parse()
