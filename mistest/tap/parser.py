@@ -13,32 +13,27 @@ class Parser:
     input_stream : Input IO stream from which TAP shall be parsed.
     """
 
-    # Token names
+    states = (
+        ('description','exclusive'),
+
+        )
+
     tokens = (
         'OK',
         'NOT',
         'NUMBER',
+        'TEXT',
+        'DIRECTIVE',
         )
 
-    # Tokens
+    # Initial Tokens
     #t_PLAN = r'1..\d+'
-    t_OK = r'ok'
-    t_NOT = r'not'
-
-    def t_NUMBER(self, t):
-        r"""\d+"""
-        try:
-            t.value = int(t.value)
-        except ValueError:
-            print("Integer value too large %d", t.value)
-            t.value = 0
+    def t_OK(self, t):
+        r'ok'
+        self.lexer.begin('description')
         return t
 
-
-    #t_DESCRIPTION = r'[^#]*'
-    #t_DIRECTIVE_SEP = r'#'
-    #t_TODO = r'TODO'
-    #t_SKIP = r'SKIP'
+    t_NOT = r'not'
 
     t_ignore = ' \t\r\n'
 
@@ -46,20 +41,42 @@ class Parser:
         print("Illegal character '%s'" % t.value[0])
         t.lexer.skip(1)
 
+
+    def t_description_NUMBER(self, t):
+        r"""\s+\d+\s+"""
+        try:
+            t.value = int(t.value)
+        except ValueError:
+            print("Integer value too large %d", t.value)
+            t.value = 0
+        return t
+    
+    t_description_TEXT = r'[^#^\d][^#]+'
+    t_description_DIRECTIVE = r'\#'
+    t_description_ignore = '\r\n'
+
+    def t_description_error(self, t):
+        print("Illegal character '%s' in state description" % t.value[0])
+        t.lexer.skip(1)
+
+    #t_DIRECTIVE_SEP = r'#'
+    #t_TODO = r'TODO'
+    #t_SKIP = r'SKIP'
+
     def p_tap(self, p):
-        """tap : ok number"""
-        print("tap", p[1], p[2])
+        """tap : ok number description"""
+        print("tap", p[1], p[2], p[3])
         p[0] = p[1]
 
     def p_ok(self, p):
         """ok : OK"""
         print("an ok")
-        p[0] = p[1]
+        p[0] = True
 
     def p_not_ok(self, p):
         """ok : NOT OK"""
         print("An not ok")
-        p[0] = p[1]
+        p[0] = False
 
     def p_number(self, p):
         """number : NUMBER"""
@@ -67,7 +84,16 @@ class Parser:
 
     def p_no_number(self, p):
         """number : """
+        self.lexer.begin('description')
         p[0] = 1
+
+    def p_description(self, p):
+        """description : TEXT"""
+        p[0] = p[1]
+
+    def p_no_description(self, p):
+        """description : """
+        p[0] = ""
 
     def p_error(self, p):
         print("Syntax error")
@@ -84,9 +110,10 @@ class Parser:
 
         for line in f:
             print("parsing:'\n%s'" % line)
+            self.lexer.begin('INITIAL')
             self.parser.parse(line)
 
 if __name__ == '__main__':
-    f = io.StringIO("ok 1\nnot ok\n")
+    f = io.StringIO("ok 1\nnot ok\nok 3 Happy")
     p = Parser(f)
     p.parse()
