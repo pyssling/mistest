@@ -1,4 +1,5 @@
 import io
+import re
 import ply.lex as lex
 import ply.yacc as yacc
 
@@ -31,7 +32,12 @@ class Parser:
         )
 
     # Initial Tokens
-    t_PLAN = r'1..\d+'
+    def t_PLAN(self, t):
+        r'1..\d+'
+        match = re.match('1..(\d+)', t.value)
+        t.value = int(match.group(1))
+        return t
+
     def t_OK(self, t):
         r'ok'
         self.lexer.begin('description')
@@ -108,6 +114,7 @@ class Parser:
 
     def p_plan(self, p):
         """plan : PLAN"""
+        print("plan", p[1])
 
     def p_plan_diagnostic(self, p):
         """plan : PLAN diagnostic"""
