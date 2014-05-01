@@ -3,6 +3,95 @@ import re
 import ply.lex as lex
 import ply.yacc as yacc
 
+# Tap output classes
+class Plan:
+    """A TAP plan
+
+    Contains the number of planned tests as well
+    as a possible diagnostic of the Diagnostic class"""
+
+    number = 0
+    diagnostic = None
+
+    def __init__(self, number, diagnostic):
+        self.type = 'plan'
+        self.number = number
+        self.diagnostic = diagnostic
+
+    def __str__(self):
+        plan = "1.." + str(self.number)
+        if self.diagnostic:
+            plan += " " + str(self.diagnostic)
+
+        return plan
+
+class TestLine:
+    """A TAP test line
+
+    Contains the an ok which is either True or False,
+    a number which is the test number in the sequence,
+    a description and a directive and directive description."""
+
+    ok = True
+    number = 0
+    description = "A nice little test"
+    directive = "TODO"
+    directive_description = "Improve niceness"
+
+    def __init__(self, ok, number, description, \
+                 directive, directive_description):
+        self.type = 'test_line'
+        self.ok = ok
+        self.number = number
+        self.description = description
+        self.directive = directive
+        self.directive_description = directive_description
+
+    def __str__(self):
+        test_line = ("ok" if self.ok else "not ok") + " " + str(self.number)
+
+        if self.description:
+            test_line += " " + self.description
+
+        if self.directive:
+            test_line += " # " + self.directive
+
+            if self.directive_description:
+                test_line += " " + self.directive_description
+
+        return test_line
+
+class Diagnostic:
+    """A TAP diagnostic
+
+    Typically a comment from the test case relating progress information."""
+
+    diagnostic = "A comment relating progress"
+
+    def __init__(self, diagnostic):
+        self.type = 'diagnostic'
+        self.diagnostic = diagnostic
+
+    def __str__(self):
+        return "# " + self.diagnostic
+
+# Tap error classes
+class NumberingError(Exception):
+    """Raised when tests are not executed in the correct ordering"""
+    pass
+
+class BailOutError(Exception):
+    """Raised when a 'Bail out!' occurs"""
+    pass
+
+class NotTapError(Exception):
+    """Non TAP input was encountered"""
+    pass
+
+class PlanError(Exception):
+    """The number of tests in the plan was exceeded"""
+
+# Tap parser
 class Parser:
     """A TAP Parser module
 
@@ -11,8 +100,12 @@ class Parser:
 
     Parameters
     ----------
-    input_stream : Input IO stream from which TAP shall be parsed.
+    input_stream : Input IO stream from which TAP is to be parsed.
     """
+
+    planned_number = 0
+    test_number = 0
+    input_stream = None
 
     states = (
         ('description', 'exclusive'),
@@ -24,6 +117,8 @@ class Parser:
         'PLAN',
         'OK',
         'NOT',
+        'BAIL',
+        'OUT',
         'NUMBER',
         'TEXT',
         'HASH',
@@ -50,34 +145,40 @@ class Parser:
         self.lexer.begin('text')
         return t
 
+    t_BAIL = r'[Bb][Aa][Ii][Ll]'
+
+    def t_OUT(self, t):
+        r'[Oo][Uu][Tt]!'
+        self.lexer.begin('text')
+        return t
+
     t_ignore = ' \t\r\n'
 
     def t_error(self, t):
-        print("Illegal character '%s'" % t.value[0])
-        t.lexer.skip(1)
+        raise NotTapError(t.lexer.lexdata)
 
     # Description tokens
     def t_description_NUMBER(self, t):
-        r'[ \t]+\d+[ \t]+'
+        r'[ \t]\d+[ \t]*'
         try:
             t.value = int(t.value)
         except ValueError:
             print("Integer value too large %d", t.value)
             t.value = 0
+
         return t
-    
-    t_description_TEXT = r'[^#^\d][^#]+'
+
+    t_description_TEXT = r'[^#^\d][^#^\r^\n]+'
 
     def t_description_HASH(self, t):
-        r'\#'
+        r'[ \t]*\#'
         self.lexer.begin('directive')
         return t
 
     t_description_ignore = '\r\n'
 
     def t_description_error(self, t):
-        print("Illegal character '%s' in state description" % t.value[0])
-        t.lexer.skip(1)
+        raise NotTapError(t.lexer.lexdata)
 
     # Directive tokens
     def t_directive_TODO(self, t):
@@ -93,8 +194,7 @@ class Parser:
     t_directive_ignore = ' \r\n'
 
     def t_directive_error(self, t):
-        print("Illegal character '%s' in state description" % t.value[0])
-        t.lexer.skip(1)
+        raise NotTapError(t.lexer.lexdata)
 
     # Text tokens
     t_text_TEXT = "[^\r^\n]+"
@@ -113,30 +213,34 @@ class Parser:
                | """
         p[0] = p[1]
 
+    def p_bail_out(self, p):
+        """tap : BAIL OUT
+               | BAIL OUT TEXT"""
+        if len(p) == 3:
+            raise BailOutError()
+        elif len(p) == 4:
+            raise BailOutError(p[3].strip())
+
+    def p_tap_error(self, p):
+        """tap : error"""
+        raise NotTapError(self.lexer.lexdata)
+
     def p_plan(self, p):
         """plan : PLAN
                 | PLAN diagnostic"""
         if len(p) == 2:
-            p[0] = { 'plan' : p[1],
-                     'diagnostic' : ""
-                     }
+            p[0] = Plan(p[1], None)
         elif len(p) == 3:
-            p[0] = { 'plan' : p[1],
-                     'diagnostic' : p[2]
-                     }
+            p[0] = Plan(p[1], p[2].diagnostic)
 
     def p_diagnostic(self, p):
         """diagnostic : HASH TEXT"""
-        p[0] = { 'diagnostic' : p[2] }
+        p[0] = Diagnostic(p[2].strip())
 
     def p_test_line(self, p):
         """test_line : ok number description directive"""
-        p[0] = { 'ok' : p[1],
-                 'number' : p[2],
-                 'description' : p[3],
-                 'directive' : p[4]['directive'],
-                 'directive_description' : p[4]['description'],
-                 }
+        p[0] = TestLine(p[1], p[2], p[3],
+                        p[4]['directive'], p[4]['description'])
 
     def p_ok(self, p):
         """ok : OK
@@ -149,35 +253,42 @@ class Parser:
     def p_number(self, p):
         """number : NUMBER
                   | """
+
+        if self.planned_number > 0 and self.test_number > self.planned_number:
+            raise PlanError("Number of planned tests (" +
+                            str(planned_number) + ") exceeded")
+
         if len(p) > 1:
-#            if p[1] != self.test_number:
-#                raise SyntaxError("Unexpected test number")
+            if p[1] != self.test_number:
+                raise NumberingError("Unexpected test number " + str(p[1]) +
+                                     " expecting " + str(self.test_number))
             p[0] = p[1]
-            
+
         else:
             p[0] = self.test_number
-            self.test_number = self.test_number + 1
+
+        self.test_number = self.test_number + 1
 
     def p_description(self, p):
         """description : TEXT
                        | """
         if len(p) > 1:
-            p[0] = p[1]
+            p[0] = p[1].strip()
         else:
-            p[0] = ""
+            p[0] = None
 
     def p_directive(self, p):
         """directive : HASH TODO description
                      | HASH SKIP description
                      | """
         if len(p) > 3:
-            p[0] = { 'directive' : p[2], 'description' : p[3] }
+            p[0] = { 'directive' : p[2].upper(), 'description' : p[3] }
         else:
-            p[0] = { 'directive' : None, 'description' : '' }
+            p[0] = { 'directive' : None, 'description' : None }
 
     def p_error(self, p):
         print("Syntax error")
-    
+
     def __init__(self, input_stream):
         self.input_stream = input_stream
         self.lexer = lex.lex(module=self)
@@ -188,22 +299,92 @@ class Parser:
         self.ok = 0
         self.not_ok = 0
 
-        for line in f:
-            print(line)
+        for line in self.input_stream:
             self.lexer.begin('INITIAL')
-            dict = self.parser.parse(line)
-            print(dict)
+            yield self.parser.parse(line)
+
 
 if __name__ == '__main__':
-    str = "1..4\n" \
+
+    def run_self_test(tap_str):
+        f = io.StringIO(tap_str)
+        p = Parser(f)
+        last_tap = None
+        for tap in p.parse():
+            last_tap = tap
+
+        return tap
+
+    # Test 1
+    plan = run_self_test("1..4 # all of them\n")
+    assert plan.number == 4
+    assert plan.diagnostic == "all of them"
+
+    ok2 = run_self_test("1..1\n" \
+                            "ok 1\n" \
+                            "ok 2\n")
+    assert ok2.ok == True
+    assert ok2.number == 2
+    assert ok2.description == None
+    assert ok2.directive == None
+    assert ok2.directive_description == None
+
+    not_ok3 = run_self_test("1..3\n" \
+                                "ok 1 Hello\n" \
+                                "ok 2 drat\n" \
+                                "not ok Sometimes\n")
+    assert not_ok3.ok == False
+    assert not_ok3.number == 3
+    assert not_ok3.description == "Sometimes"
+    assert not_ok3.directive == None
+    assert not_ok3.directive_description == None
+
+    ok_todo = run_self_test("ok # ToDo the directive")
+
+    assert ok_todo.ok == True
+    assert ok_todo.number == 1
+    assert ok_todo.description == None
+    assert ok_todo.directive == "TODO"
+    assert ok_todo.directive_description == "the directive"
+
+    not_ok_skip = run_self_test("not ok # skip")
+
+    assert not_ok_skip.ok == False
+    assert not_ok_skip.number == 1
+    assert not_ok_skip.description == None
+    assert not_ok_skip.directive == "SKIP"
+    assert not_ok_skip.directive_description == None
+
+    try:
+        not_tap = run_self_test("a wtf")
+    except NotTapError:
+        pass
+
+    try:
+        numbering_error = run_self_test("ok\n" \
+                                            "ok 3\n")
+    except NumberingError:
+        pass
+
+
+    try:
+        plan_error = run_self_test("1..1\n" \
+                                       "ok\n" \
+                                       "not ok\n")
+    except PlanError:
+        pass
+
+    try:
+        bail_out = run_self_test("Bail out!")
+    except BailOutError:
+        pass
+
+    tap_str = "1..4 # all of them\n" \
         "ok 1\n" \
         "not ok\n" \
         "ok 3 Happy # TODO\n" \
         "ok 4 # TODO fix this\n" \
-        "# Well, this far, so good!"
-    print("to parse:\n--------\n")
-    print(str)
-    print("-------\n")
-    f = io.StringIO(str)
-    p = Parser(f)
-    p.parse()
+        "# Well, this far, so good!\n" \
+        "ok # skip not applicable\n" \
+        " a wtf\n" \
+        "ok 7"
