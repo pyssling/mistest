@@ -21,7 +21,7 @@ class Plan:
     def __str__(self):
         plan = "1.." + str(self.number)
         if self.diagnostic:
-            plan += " " + str(self.diagnostic)
+            plan += " # " + str(self.diagnostic)
 
         return plan
 
@@ -77,19 +77,28 @@ class Diagnostic:
 
 # Tap error classes
 class NumberingError(Exception):
-    """Raised when tests are not executed in the correct ordering"""
+    """Raised when tests are not executed with the correct ordering"""
     pass
 
 class BailOutError(Exception):
     """Raised when a 'Bail out!' occurs"""
-    pass
+
+    def __init__(self, description=None):
+        self.description = description
+
+    def __str__(self):
+        bail_out_line = "Bail out!"
+        if self.description:
+            bail_out_line += " " + self.description
+
+        return bail_out_line
 
 class NotTapError(Exception):
     """Non TAP input was encountered"""
     pass
 
 class PlanError(Exception):
-    """The number of tests in the plan was exceeded"""
+    """The number of tests did not match the plan"""
 
 # Tap parser
 class Parser:
@@ -103,7 +112,7 @@ class Parser:
     input_stream : Input IO stream from which TAP is to be parsed.
     """
 
-    planned_number = 0
+    planned_number = None
     test_number = 0
     input_stream = None
 
@@ -120,6 +129,7 @@ class Parser:
         'BAIL',
         'OUT',
         'NUMBER',
+        'DASH',
         'TEXT',
         'HASH',
         'TODO',
@@ -155,7 +165,7 @@ class Parser:
     t_ignore = ' \t\r\n'
 
     def t_error(self, t):
-        raise NotTapError(t.lexer.lexdata)
+        raise NotTapError(t.lexer.lexdata.strip())
 
     # Description tokens
     def t_description_NUMBER(self, t):
@@ -168,7 +178,9 @@ class Parser:
 
         return t
 
-    t_description_TEXT = r'[^#^\d][^#^\r^\n]+'
+    t_description_DASH = r'-'
+
+    t_description_TEXT = r'[^#^\d^\-][^#^\r^\n]+'
 
     def t_description_HASH(self, t):
         r'[ \t]*\#'
@@ -178,7 +190,7 @@ class Parser:
     t_description_ignore = '\r\n'
 
     def t_description_error(self, t):
-        raise NotTapError(t.lexer.lexdata)
+        raise NotTapError(t.lexer.lexdata.strip())
 
     # Directive tokens
     def t_directive_TODO(self, t):
@@ -194,7 +206,7 @@ class Parser:
     t_directive_ignore = ' \r\n'
 
     def t_directive_error(self, t):
-        raise NotTapError(t.lexer.lexdata)
+        raise NotTapError(t.lexer.lexdata.strip())
 
     # Text tokens
     t_text_TEXT = "[^\r^\n]+"
@@ -209,8 +221,7 @@ class Parser:
     def p_tap(self, p):
         """tap : plan
                | diagnostic
-               | test_line
-               | """
+               | test_line"""
         p[0] = p[1]
 
     def p_bail_out(self, p):
@@ -223,24 +234,34 @@ class Parser:
 
     def p_tap_error(self, p):
         """tap : error"""
-        raise NotTapError(self.lexer.lexdata)
+        raise NotTapError(self.lexer.lexdata.strip())
 
     def p_plan(self, p):
         """plan : PLAN
                 | PLAN diagnostic"""
+
+        if self.planned_number:
+            raise NotTapError("Duplicate plan")
+
+        self.planned_number = p[1]
+
+        if self.test_number > self.planned_number:
+            raise PlanError("Number of planned tests (" +
+                            str(self.planned_number) + ") exceeded")
+
         if len(p) == 2:
-            p[0] = Plan(p[1], None)
+            p[0] = Plan(self.planned_number, None)
         elif len(p) == 3:
-            p[0] = Plan(p[1], p[2].diagnostic)
+            p[0] = Plan(self.planned_number, p[2].diagnostic)
 
     def p_diagnostic(self, p):
         """diagnostic : HASH TEXT"""
         p[0] = Diagnostic(p[2].strip())
 
     def p_test_line(self, p):
-        """test_line : ok number description directive"""
-        p[0] = TestLine(p[1], p[2], p[3],
-                        p[4]['directive'], p[4]['description'])
+        """test_line : ok number dash description directive"""
+        p[0] = TestLine(p[1], p[2], p[4],
+                        p[5]['directive'], p[5]['description'])
 
     def p_ok(self, p):
         """ok : OK
@@ -254,20 +275,25 @@ class Parser:
         """number : NUMBER
                   | """
 
-        if self.planned_number > 0 and self.test_number > self.planned_number:
-            raise PlanError("Number of planned tests (" +
-                            str(planned_number) + ") exceeded")
+        self.test_number = self.test_number + 1
+
+        if self.planned_number and self.test_number > self.planned_number:
+                raise PlanError("Number of planned tests (" +
+                                str(self.planned_number) + ") exceeded")
 
         if len(p) > 1:
+
             if p[1] != self.test_number:
                 raise NumberingError("Unexpected test number " + str(p[1]) +
                                      " expecting " + str(self.test_number))
             p[0] = p[1]
-
         else:
             p[0] = self.test_number
 
-        self.test_number = self.test_number + 1
+    def p_dash(self, p):
+        """dash : DASH
+                | """
+        pass
 
     def p_description(self, p):
         """description : TEXT
@@ -287,40 +313,47 @@ class Parser:
             p[0] = { 'directive' : None, 'description' : None }
 
     def p_error(self, p):
-        print("Syntax error")
+        print("the output:'" + self.lexer.lexdata + "'")
+        raise NotTapError(self.lexer.lexdata.rstrip())
 
     def __init__(self, input_stream):
         self.input_stream = input_stream
         self.lexer = lex.lex(module=self)
         self.parser = yacc.yacc(module=self)
-        self.test_number = 1
+        self.test_number = 0
 
-    def parse(self):
-        self.ok = 0
-        self.not_ok = 0
-
+    def __iter__(self):
         for line in self.input_stream:
             self.lexer.begin('INITIAL')
+            try:
+                line = line.decode("utf-8")
+            except:
+                pass
             yield self.parser.parse(line)
+
+        if self.planned_number and self.test_number < self.planned_number:
+            raise PlanError("Number of executed tests (" + str(self.test_number)
+                            + ") less than the number of planned (" +
+                            str(self.planned_number) + ")")
 
 
 if __name__ == '__main__':
 
-    def run_self_test(tap_str):
+    def __run_self_test(tap_str):
         f = io.StringIO(tap_str)
         p = Parser(f)
         last_tap = None
-        for tap in p.parse():
+        for tap in p:
             last_tap = tap
 
-        return tap
+        return last_tap
 
     # Test 1
-    plan = run_self_test("1..4 # all of them\n")
-    assert plan.number == 4
+    plan = __run_self_test("1..0 # all of them\n")
+    assert plan.number == 0
     assert plan.diagnostic == "all of them"
 
-    ok2 = run_self_test("1..1\n" \
+    ok2 = __run_self_test("1..2\n" \
                             "ok 1\n" \
                             "ok 2\n")
     assert ok2.ok == True
@@ -329,7 +362,7 @@ if __name__ == '__main__':
     assert ok2.directive == None
     assert ok2.directive_description == None
 
-    not_ok3 = run_self_test("1..3\n" \
+    not_ok3 = __run_self_test("1..3\n" \
                                 "ok 1 Hello\n" \
                                 "ok 2 drat\n" \
                                 "not ok Sometimes\n")
@@ -339,7 +372,7 @@ if __name__ == '__main__':
     assert not_ok3.directive == None
     assert not_ok3.directive_description == None
 
-    ok_todo = run_self_test("ok # ToDo the directive")
+    ok_todo = __run_self_test("ok # ToDo the directive")
 
     assert ok_todo.ok == True
     assert ok_todo.number == 1
@@ -347,7 +380,7 @@ if __name__ == '__main__':
     assert ok_todo.directive == "TODO"
     assert ok_todo.directive_description == "the directive"
 
-    not_ok_skip = run_self_test("not ok # skip")
+    not_ok_skip = __run_self_test("not ok # skip")
 
     assert not_ok_skip.ok == False
     assert not_ok_skip.number == 1
@@ -356,35 +389,25 @@ if __name__ == '__main__':
     assert not_ok_skip.directive_description == None
 
     try:
-        not_tap = run_self_test("a wtf")
+        not_tap = __run_self_test("a wtf")
     except NotTapError:
         pass
 
     try:
-        numbering_error = run_self_test("ok\n" \
+        numbering_error = __run_self_test("ok\n" \
                                             "ok 3\n")
     except NumberingError:
         pass
 
 
     try:
-        plan_error = run_self_test("1..1\n" \
+        plan_error = __run_self_test("1..1\n" \
                                        "ok\n" \
                                        "not ok\n")
     except PlanError:
         pass
 
     try:
-        bail_out = run_self_test("Bail out!")
+        bail_out = __run_self_test("Bail out!")
     except BailOutError:
         pass
-
-    tap_str = "1..4 # all of them\n" \
-        "ok 1\n" \
-        "not ok\n" \
-        "ok 3 Happy # TODO\n" \
-        "ok 4 # TODO fix this\n" \
-        "# Well, this far, so good!\n" \
-        "ok # skip not applicable\n" \
-        " a wtf\n" \
-        "ok 7"
