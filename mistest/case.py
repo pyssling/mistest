@@ -1,11 +1,14 @@
 import logging
+import os
 import subprocess
-import tap.parser
+import tap
 
-class ExecutionResult:
-    """The result of an Executor run
+class CaseNotExecutable(Exception):
+    """Test case is not executable"""
+    pass
 
-    Will contain the result of an executor run"""
+class CaseExecutionResult:
+    """The result of a test case execution run"""
 
     planned = 0
     run = 0
@@ -13,30 +16,52 @@ class ExecutionResult:
     skip = 0
     todo = 0
 
-class Executor:
-    """A testcase executor
+class Case:
+    """A test case executor
 
-    Will fork and execute a provided testcase, parsing the stdout during
+    Will fork and execute a provided test case, parsing the stdout during
     execution."""
 
-    command = []
+    file = ""
+    directives = {}
     popen = None
+    suite = None
 
-    def __init__(self, command, result_queue=None):
-        self.command = command
+    def __init__(self, file, directives=None, suite=None, result_queue=None):
+        if not os.path.isfile(file):
+            raise CaseNotExecutable("No such test case " + file)
+        if not os.access(file, os.X_OK):
+            raise CaseNotExecutable("Test case not executable " + file)
 
-    def execute(self):
+        self.file = file
+        self.directives = directives
+
+    def __generate_args(self, directives):
+        arguments = []
+
+        if self.directives and self.directives.arguments:
+            arguments.append(self.directives.arguments)
+
+        if directives:
+            arguments.append(directives.arguments)
+
+    def execute(self, directives=None):
+
+        arguments = __generate_args(directives)
+
+        command = [ self.file ] + arguments
+
         popen = subprocess.Popen(self.command, stdout=subprocess.PIPE)
-        parser = tap.parser.Parser(popen.stdout)
-        result = ExecutionResult()
+        parser = tap.Parser(popen.stdout)
+        result = CaseExecutionResult()
 
         try:
             for tap_output in parser:
 
-                if isinstance(tap_output, tap.parser.Plan):
+                if isinstance(tap_output, tap.Plan):
                     result.planned = tap_output.number
 
-                if isinstance(tap_output, tap.parser.TestLine):
+                if isinstance(tap_output, tap.TestLine):
                     result.run += 1
                     if tap_output.ok:
                         result.ok += 1
@@ -46,9 +71,9 @@ class Executor:
                         if tap_output.directive == "SKIP":
                             result.skip += 1
 
-                logging.info(tap_output)
+                print(tap_output)
         except Exception as e:
-            logging.error(e)
+            print("Error: " + str(e))
 
 # Self test by forking off a child which will print the test output.
 if __name__ == '__main__':
@@ -59,12 +84,12 @@ if __name__ == '__main__':
         quit()
 
     def __run_self_test(tap_str):
-        executor = Executor(["python3.3", __file__, "child", tap_str])
-        executor.execute()
+        case = Case(["python3.3", __file__, "child", tap_str])
+        case.execute()
 
 
     # Test 1
-    plan = __run_self_test("1..4 # all of them\n")
+    plan = __run_self_test("1..4 # all of them\nok\nok\nok\nok")
 
     ok2 = __run_self_test("1..1\n" \
                             "ok 1\n" \

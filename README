@@ -1,0 +1,5 @@
+MisTest
+
+A test harness written in python intended for test execution on a local
+or remote system, executing test suites written in YAML, and parsing
+test output in TAP format.

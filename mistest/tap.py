@@ -94,11 +94,17 @@ class BailOutError(Exception):
         return bail_out_line
 
 class NotTapError(Exception):
-    """Non TAP input was encountered"""
-    pass
+    """Non-TAP input was encountered"""
+
+    def __init__(self, non_tap):
+        self.non_tap = non_tap
+
+    def __str__(self):
+        return "Non-TAP input was encountered: \"" + self.non_tap + "\""
 
 class PlanError(Exception):
     """The number of tests did not match the plan"""
+    pass
 
 # Tap parser
 class Parser:
