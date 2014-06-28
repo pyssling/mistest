@@ -1,0 +1,5 @@
+Directives:
+   - ordered
+Suite:
+   - a_test_case.py:
+        arguments: -y

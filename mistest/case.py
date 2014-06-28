@@ -22,11 +22,6 @@ class Case:
     Will fork and execute a provided test case, parsing the stdout during
     execution."""
 
-    file = ""
-    directives = {}
-    popen = None
-    suite = None
-
     def __init__(self, file, directives=None, suite=None, result_queue=None):
         if not os.path.isfile(file):
             raise CaseNotExecutable("No such test case " + file)
@@ -35,6 +30,8 @@ class Case:
 
         self.file = file
         self.directives = directives
+        self.popen = None
+        self.suite = None
 
     def __generate_args(self, directives):
         arguments = []
@@ -74,6 +71,15 @@ class Case:
                 print(tap_output)
         except Exception as e:
             print("Error: " + str(e))
+
+    def __str__(self):
+        return self.file
+
+def looks_like_a_case(file):
+    if os.access(file, os.X_OK):
+        return True
+    else:
+        return False
 
 # Self test by forking off a child which will print the test output.
 if __name__ == '__main__':

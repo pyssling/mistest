@@ -118,10 +118,6 @@ class Parser:
     input_stream : Input IO stream from which TAP is to be parsed.
     """
 
-    planned_number = None
-    test_number = 0
-    input_stream = None
-
     states = (
         ('description', 'exclusive'),
         ('directive', 'exclusive'),
