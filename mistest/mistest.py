@@ -53,4 +53,4 @@ else:
             sys.exit("Error while parsing " + test_or_resource + ": " + str(e))
 
 for test in top_level_suite:
-    print(test)
+    test.execute()

@@ -28,15 +28,13 @@ class Suite:
         self.dependencies = []
         self.directives = []
         self.test_list = []
-        self.file = None
 
         if name:
             self.name = name
-        else:
-            self.name = file
-
-        if file:
-            self.file = file
+            self.dir = os.curdir
+        elif file:
+            self.name = os.path.relpath(file)
+            self.dir = os.path.dirname(self.name)
             stream = open(file)
 
         if stream:
@@ -55,17 +53,18 @@ class Suite:
                 raise SuiteParseException("No suite declaration in suite")
 
             for test in suite['Suite']:
-                test, directives = test.popitem()
+                if isinstance(test, dict):
+                    test, directives = test.popitem()
                 self.append(test)
 
     def append(self, test):
         if test.endswith('.yaml'):
             try:
-                self.test_list.append(Suite(test))
+                self.test_list.append(Suite(self.dir + "/" + test))
             except Exception as e:
                 raise SubSuiteException(str(e))
         else:
-            self.test_list.append(case.Case(test))
+            self.test_list.append(case.Case(self.dir + "/" + test))
 
     def __iter__(self):
         for test in self.test_list:

@@ -322,6 +322,7 @@ class Parser:
         self.input_stream = input_stream
         self.lexer = lex.lex(module=self)
         self.parser = yacc.yacc(module=self)
+        self.planned_number = None
         self.test_number = 0
 
     def __iter__(self):

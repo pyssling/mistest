@@ -3,3 +3,4 @@ Directives:
 Suite:
    - a_test_case.py:
         arguments: -y
+   - sub_suite/sub_test_suite.yaml

@@ -42,13 +42,15 @@ class Case:
         if directives:
             arguments.append(directives.arguments)
 
+        return arguments
+
     def execute(self, directives=None):
 
-        arguments = __generate_args(directives)
+        arguments = self.__generate_args(directives)
 
         command = [ self.file ] + arguments
 
-        popen = subprocess.Popen(self.command, stdout=subprocess.PIPE)
+        popen = subprocess.Popen(command, stdout=subprocess.PIPE)
         parser = tap.Parser(popen.stdout)
         result = CaseExecutionResult()
 
