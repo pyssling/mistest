@@ -1,10 +1,13 @@
 #!/usr/bin/python
 
-import case
-import suite
 import argparse
+import copy
 import os
 import sys
+import queue
+import case
+import suite
+import executor
 
 parser = argparse.ArgumentParser(description='Execute a mistest run.')
 
@@ -52,5 +55,31 @@ else:
         except Exception as e:
             sys.exit("Error while parsing " + test_or_resource + ": " + str(e))
 
-for test in top_level_suite:
-    test.execute()
+
+result_queue = queue.Queue()
+test_iter = iter(top_level_suite)
+executor_list = []
+for resource in resources:
+    test_executor = executor.Executor(resource, result_queue)
+    try:
+        test_executor.queue(next(test_iter))
+    except StopIteration:
+        break
+    test_executor.start()
+    executor_list.append(test_executor)
+
+# Start processing output and placing new tests on the resource queues
+
+
+while len(executor_list) > 0:
+    print("waiting for results")
+    result = result_queue.get()
+    print(result)
+    if isinstance(result, executor.ExecutionComplete):
+        print("got execution complete")
+        try:
+            result.executor.queue(next(test_iter))
+        except StopIteration:
+            result.executor.terminate()
+            result.executor.join()
+            executor_list.remove(result.executor)

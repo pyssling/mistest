@@ -10,14 +10,16 @@ class CaseNotExecutable(Exception):
 class CaseExecutionResult:
     """The result of a test case execution run"""
 
-    planned = 0
-    run = 0
-    ok = 0
-    skip = 0
-    todo = 0
+    def __init__(self):
+        self.planned = None
+        self.run = 0
+        self.ok = 0
+        self.skip = 0
+        self.todo = 0
+        self.failure = None
 
 class Case:
-    """A test case executor
+    """A test case
 
     Will fork and execute a provided test case, parsing the stdout during
     execution."""
@@ -44,21 +46,24 @@ class Case:
 
         return arguments
 
-    def execute(self, directives=None):
+    def __generate_results(self, stream, result_queue, streaming):
+        parser = tap.Parser(stream)
 
-        arguments = self.__generate_args(directives)
-
-        command = [ self.file ] + arguments
-
-        popen = subprocess.Popen(command, stdout=subprocess.PIPE)
-        parser = tap.Parser(popen.stdout)
         result = CaseExecutionResult()
 
         try:
             for tap_output in parser:
-
                 if isinstance(tap_output, tap.Plan):
+                    if streaming and result.planned:
+                        result_queue.put(result)
+                        result = CaseExecutionResult()
+
                     result.planned = tap_output.number
+
+                if streaming and not result.planned:
+                    result.failed = "No plan at start of streaming test case"
+                    result_queue.put(result)
+                    return
 
                 if isinstance(tap_output, tap.TestLine):
                     result.run += 1
@@ -71,8 +76,21 @@ class Case:
                             result.skip += 1
 
                 print(tap_output)
+
         except Exception as e:
-            print("Error: " + str(e))
+            result.failed = str(e)
+
+        result_queue.put(result)
+
+    def __call__(self, result_queue, directives=None):
+
+        arguments = self.__generate_args(directives)
+
+        command = [ self.file ] + arguments
+
+        popen = subprocess.Popen(command, stdout=subprocess.PIPE)
+
+        self.__generate_results(popen.stdout, result_queue, False)
 
     def __str__(self):
         return self.file
