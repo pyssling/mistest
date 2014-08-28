@@ -3,15 +3,15 @@ import re
 import ply.lex as lex
 import ply.yacc as yacc
 
+class Tap:
+    pass
+
 # Tap output classes
-class Plan:
+class Plan(Tap):
     """A TAP plan
 
     Contains the number of planned tests as well
     as a possible diagnostic of the Diagnostic class"""
-
-    number = 0
-    diagnostic = None
 
     def __init__(self, number, diagnostic):
         self.type = 'plan'
@@ -25,18 +25,12 @@ class Plan:
 
         return plan
 
-class TestLine:
+class TestLine(Tap):
     """A TAP test line
 
     Contains the an ok which is either True or False,
     a number which is the test number in the sequence,
     a description and a directive and directive description."""
-
-    ok = True
-    number = 0
-    description = "A nice little test"
-    directive = "TODO"
-    directive_description = "Improve niceness"
 
     def __init__(self, ok, number, description, \
                  directive, directive_description):
@@ -61,12 +55,10 @@ class TestLine:
 
         return test_line
 
-class Diagnostic:
+class Diagnostic(Tap):
     """A TAP diagnostic
 
     Typically a comment from the test case relating progress information."""
-
-    diagnostic = "A comment relating progress"
 
     def __init__(self, diagnostic):
         self.type = 'diagnostic'
@@ -315,15 +307,18 @@ class Parser:
             p[0] = { 'directive' : None, 'description' : None }
 
     def p_error(self, p):
-        print("the output:'" + self.lexer.lexdata + "'")
-        raise NotTapError(self.lexer.lexdata.rstrip())
+        raise NotTapError(p.value)
 
-    def __init__(self, input_stream):
+    def __init__(self):
+        self.lexer = lex.lex(module=self,debug=0)
+        self.parser = yacc.yacc(module=self,debug=0)
+
+    def __call__(self, input_stream):
         self.input_stream = input_stream
-        self.lexer = lex.lex(module=self)
-        self.parser = yacc.yacc(module=self)
         self.planned_number = None
         self.test_number = 0
+
+        return self
 
     def __iter__(self):
         for line in self.input_stream:
@@ -332,7 +327,7 @@ class Parser:
                 line = line.decode("utf-8")
             except:
                 pass
-            yield self.parser.parse(line)
+            yield self.parser.parse(line,lexer=self.lexer,debug=0)
 
         if self.planned_number and self.test_number < self.planned_number:
             raise PlanError("Number of executed tests (" + str(self.test_number)

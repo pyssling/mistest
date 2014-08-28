@@ -2,6 +2,7 @@ import threading
 import queue
 import suite
 import case
+import tap
 
 class ExecutorMessage:
     """A communication message to or from the executor"""
@@ -9,10 +10,15 @@ class ExecutorMessage:
     def __init__(self, executor=None):
         self.executor = executor
 
+    def __str__(self):
+        return "Executor Message: " + self.__class__.__name__
+
 class ExecutionComplete(ExecutorMessage):
+    """Executor ran to completion"""
     pass
 
 class TerminateExecutor(ExecutorMessage):
+    """Executor should terminate"""
     pass
 
 class Executor(threading.Thread):
@@ -28,15 +34,22 @@ class Executor(threading.Thread):
         self.resource = resource
         self.test_queue = queue.Queue()
         self.result_queue = result_queue
+        self.parser = tap.Parser()
 
     def queue(self, test_or_message):
         self.test_queue.put(test_or_message)
 
+    def put(self, test_or_message):
+        test_or_message.resource = self.resource
+        self.result_queue.put(test_or_message)
+
     def terminate(self):
         self.test_queue.put(TerminateExecutor())
 
+    def __str__(self):
+        return str(self.resource)
+
     def run(self):
-        print(self.resource + " waiting for a test")
         while True:
             test_or_message = self.test_queue.get()
 
@@ -45,7 +58,7 @@ class Executor(threading.Thread):
                     result = test_case(self.result_queue)
 
             elif isinstance(test_or_message, case.Case):
-                test_or_message(self.result_queue)
+                test_or_message(self)
 
             elif isinstance(test_or_message, TerminateExecutor):
                 break

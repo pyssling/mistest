@@ -8,6 +8,7 @@ import queue
 import case
 import suite
 import executor
+import tap
 
 parser = argparse.ArgumentParser(description='Execute a mistest run.')
 
@@ -72,11 +73,18 @@ for resource in resources:
 
 
 while len(executor_list) > 0:
-    print("waiting for results")
+
     result = result_queue.get()
-    print(result)
+
+    if isinstance(result, tap.Tap) or \
+            isinstance(result, case.CaseExecutionResult):
+        output_str = ""
+        if len(resources) > 1:
+            output_str += str(result.resource) + " : "
+
+        output_str += str(result)
+        print(output_str)
     if isinstance(result, executor.ExecutionComplete):
-        print("got execution complete")
         try:
             result.executor.queue(next(test_iter))
         except StopIteration:

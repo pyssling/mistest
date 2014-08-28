@@ -2,6 +2,7 @@ import logging
 import os
 import subprocess
 import tap
+import executor
 
 class CaseNotExecutable(Exception):
     """Test case is not executable"""
@@ -16,7 +17,20 @@ class CaseExecutionResult:
         self.ok = 0
         self.skip = 0
         self.todo = 0
-        self.failure = None
+        self.failed = None
+
+    def __str__(self):
+        result = ""
+        if self.failed:
+            return "failed: " + str(self.failed)
+
+        if self.planned is not None:
+            result += "planned: " + str(self.planned) + " "
+        result += "run: " + str(self.run) + " "
+        result += "ok: " + str(self.ok) + " "
+        result += "skip: " + str(self.skip) + " "
+        result += "todo: " + str(self.todo) + " "
+        return result
 
 class Case:
     """A test case
@@ -46,23 +60,23 @@ class Case:
 
         return arguments
 
-    def __generate_results(self, stream, result_queue, streaming):
-        parser = tap.Parser(stream)
+    def __generate_results(self, stream, executor, streaming):
 
+        parser = executor.parser(stream)
         result = CaseExecutionResult()
 
         try:
             for tap_output in parser:
                 if isinstance(tap_output, tap.Plan):
                     if streaming and result.planned:
-                        result_queue.put(result)
+                        executor.put(result)
                         result = CaseExecutionResult()
 
                     result.planned = tap_output.number
 
                 if streaming and not result.planned:
                     result.failed = "No plan at start of streaming test case"
-                    result_queue.put(result)
+                    executor.put(result)
                     return
 
                 if isinstance(tap_output, tap.TestLine):
@@ -75,14 +89,14 @@ class Case:
                         if tap_output.directive == "SKIP":
                             result.skip += 1
 
-                print(tap_output)
+                executor.put(tap_output);
 
         except Exception as e:
             result.failed = str(e)
 
-        result_queue.put(result)
+        executor.put(result)
 
-    def __call__(self, result_queue, directives=None):
+    def __call__(self, executor, directives=None):
 
         arguments = self.__generate_args(directives)
 
@@ -90,7 +104,7 @@ class Case:
 
         popen = subprocess.Popen(command, stdout=subprocess.PIPE)
 
-        self.__generate_results(popen.stdout, result_queue, False)
+        self.__generate_results(popen.stdout, executor, False)
 
     def __str__(self):
         return self.file
