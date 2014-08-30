@@ -73,6 +73,7 @@ class Case:
         self.directives = directives
         self.popen = None
         self.suite = None
+        self.execution_results = []
 
     def __generate_args(self, directives):
         arguments = []
@@ -142,6 +143,13 @@ class Case:
 
     def __str__(self):
         return self.file
+
+    def put(self, execution_result):
+        self.execution_results.append(execution_result)
+
+    def __iter__(self):
+        for execution_result in execution_results:
+            yield execution_result
 
 def looks_like_a_case(file):
     if os.access(file, os.X_OK):

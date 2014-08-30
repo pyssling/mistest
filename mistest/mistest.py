@@ -22,6 +22,7 @@ import sys
 import case
 import suite
 from scheduler import *
+from output import Output
 
 def parse_separated(resources_and_tests):
     top_level_suite = suite.Suite(name="Top level suite")
@@ -81,12 +82,15 @@ def parse_mistest_args(argv):
     else:
         (resources, top_level_suite) = parse_unseparated(resources_and_tests)
 
+    output = Output()
+
     if len(resources) < 1:
         resources.append("local")
+        output.set_prefix_with_resource(True)
 
-    return (resources, top_level_suite)
+    return (resources, top_level_suite, output)
 
 
 # Main function
-(resources, top_level_suite) = parse_mistest_args(sys.argv)
-schedule_tests(resources, top_level_suite)
+(resources, top_level_suite, output) = parse_mistest_args(sys.argv)
+schedule_tests(resources, top_level_suite, output)

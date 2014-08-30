@@ -19,7 +19,7 @@ from case import *
 from executor import *
 from tap import *
 
-def schedule_tests(resources, suite):
+def schedule_tests(resources, suite, output):
 
     # Create the executors
     result_queue = queue.Queue()
@@ -39,15 +39,11 @@ def schedule_tests(resources, suite):
 
         result = result_queue.get()
 
-        if isinstance(result, Tap) or \
-                isinstance(result, CaseExecutionResult):
-            output_str = ""
-            if len(resources) > 1:
-                output_str += str(result.resource) + " : "
-
-            output_str += str(result)
-
-            print(output_str)
+        if isinstance(result, Tap):
+            output(result)
+        elif isinstance(result, CaseExecutionResult):
+            result.case.put(result)
+            output(result)
 
         if isinstance(result, ExecutionComplete):
             try:
