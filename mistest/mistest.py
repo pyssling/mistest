@@ -23,33 +23,23 @@ import case
 import suite
 from scheduler import *
 
-parser = argparse.ArgumentParser(description='Execute a mistest run.')
-
-parser.add_argument('resource', nargs='*', help='A test resource.')
-parser.add_argument('separator', nargs='?', metavar='-',
-                    choices=['-'], help='Resource and test separator')
-parser.add_argument('test', nargs='+', help='A suite or test case.')
-
-args = parser.parse_args()
-
-# The resource/suite division is a fake, python will accumulate all values
-# but the last in resource, so post-parsing is needed.
-resources_and_tests = args.resource + args.test
-top_level_suite = suite.Suite(name="Top level suite")
-
-if '-' in resources_and_tests:
+def parse_separated(resources_and_tests):
+    top_level_suite = suite.Suite(name="Top level suite")
     resources = resources_and_tests[0:resources_and_tests.index('-')]
+
     for test in resources_and_tests[resources_and_tests.index('-') + 1:]:
         try:
             if suite.looks_like_a_suite(test) or case.looks_like_a_case(test):
                 top_level_suite.append(test)
             else:
-                sys.exit(test + " does not appear to be a"
-                         " test case or suite")
+                sys.exit(test + " does not appear to be a test case or suite")
         except Exception as e:
-            sys.exit("Error while parsing " + test + ": " + str(e))
+                sys.exit("Error while parsing " + test + ": " + str(e))
 
-else:
+    return (resources, top_level_suite)
+
+def parse_unseparated(resources_and_tests):
+    top_level_suite = suite.Suite(name="Top level suite")
     resources = []
 
     args_are_resources = True
@@ -69,7 +59,34 @@ else:
         except Exception as e:
             sys.exit("Error while parsing " + test_or_resource + ": " + str(e))
 
-if len(resources) < 1:
-    resources.append("local")
+    return (resources, top_level_suite)
 
+def parse_mistest_args(argv):
+
+    parser = argparse.ArgumentParser(description='Execute a mistest run.')
+
+    parser.add_argument('resource', nargs='*', help='A test resource.')
+    parser.add_argument('separator', nargs='?', metavar='-',
+                        choices=['-'], help='Resource and test separator')
+    parser.add_argument('test', nargs='+', help='A suite or test case.')
+
+    args = parser.parse_args(argv)
+
+    # The resource/suite division is a fake, python will accumulate all values
+    # but the last in resource, so post-parsing is needed.
+    resources_and_tests = args.resource + args.test
+
+    if '-' in resources_and_tests:
+        (resources, top_level_suite) = parse_separated(resources_and_tests)
+    else:
+        (resources, top_level_suite) = parse_unseparated(resources_and_tests)
+
+    if len(resources) < 1:
+        resources.append("local")
+
+    return (resources, top_level_suite)
+
+
+# Main function
+(resources, top_level_suite) = parse_mistest_args(sys.argv)
 schedule_tests(resources, top_level_suite)
