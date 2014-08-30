@@ -27,13 +27,22 @@ class CaseNotExecutable(Exception):
 class CaseExecutionResult:
     """The result of a test case execution run"""
 
-    def __init__(self):
+    def __init__(self, case):
+        self.case = case
         self.planned = None
         self.run = 0
         self.ok = 0
         self.skip = 0
         self.todo = 0
         self.failed = None
+        self.tap_list = []
+
+    def put(self, tap):
+        self.tap_list.append(tap)
+
+    def __iter__(self):
+        for tap in tap_list:
+            yield tap
 
     def __str__(self):
         result = ""
@@ -79,10 +88,13 @@ class Case:
     def __generate_results(self, stream, executor, streaming):
 
         parser = executor.parser(stream)
-        result = CaseExecutionResult()
+        result = CaseExecutionResult(self)
 
         try:
             for tap_output in parser:
+
+                # Handle plans, must be at the start of streaming
+                # testcases
                 if isinstance(tap_output, tap.Plan):
                     if streaming and result.planned:
                         executor.put(result)
@@ -90,11 +102,14 @@ class Case:
 
                     result.planned = tap_output.number
 
+                # A testcase that doesn't start with a plan during
+                # streaming causes a failure.
                 if streaming and not result.planned:
                     result.failed = "No plan at start of streaming test case"
                     executor.put(result)
                     return
 
+                # Accumulate output in counters
                 if isinstance(tap_output, tap.TestLine):
                     result.run += 1
                     if tap_output.ok:
@@ -105,7 +120,10 @@ class Case:
                         if tap_output.directive == "SKIP":
                             result.skip += 1
 
-                executor.put(tap_output);
+                # Send output to the executor (for possible immediate
+                # output) and also to the result for post processing.
+                executor.put(tap_output)
+                result.put(tap_output)
 
         except Exception as e:
             result.failed = str(e)

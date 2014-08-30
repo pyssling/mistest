@@ -19,11 +19,9 @@ import argparse
 import copy
 import os
 import sys
-import queue
 import case
 import suite
-import executor
-import tap
+from scheduler import *
 
 parser = argparse.ArgumentParser(description='Execute a mistest run.')
 
@@ -71,38 +69,7 @@ else:
         except Exception as e:
             sys.exit("Error while parsing " + test_or_resource + ": " + str(e))
 
+if len(resources) < 1:
+    resources.append("local")
 
-result_queue = queue.Queue()
-test_iter = iter(top_level_suite)
-executor_list = []
-for resource in resources:
-    test_executor = executor.Executor(resource, result_queue)
-    try:
-        test_executor.queue(next(test_iter))
-    except StopIteration:
-        break
-    test_executor.start()
-    executor_list.append(test_executor)
-
-# Start processing output and placing new tests on the resource queues
-
-
-while len(executor_list) > 0:
-
-    result = result_queue.get()
-
-    if isinstance(result, tap.Tap) or \
-            isinstance(result, case.CaseExecutionResult):
-        output_str = ""
-        if len(resources) > 1:
-            output_str += str(result.resource) + " : "
-
-        output_str += str(result)
-        print(output_str)
-    if isinstance(result, executor.ExecutionComplete):
-        try:
-            result.executor.queue(next(test_iter))
-        except StopIteration:
-            result.executor.terminate()
-            result.executor.join()
-            executor_list.remove(result.executor)
+schedule_tests(resources, top_level_suite)
