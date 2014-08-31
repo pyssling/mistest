@@ -70,8 +70,10 @@ def parse_mistest_args(argv):
     parser.add_argument('separator', nargs='?', metavar='-',
                         choices=['-'], help='Resource and test separator')
     parser.add_argument('test', nargs='+', help='A suite or test case.')
+    parser.add_argument('--immediate-output', action='store_true',
+                        help='Print output immediately, even during parallel execution')
 
-    args = parser.parse_args(argv)
+    args = parser.parse_args(argv[1:])
 
     # The resource/suite division is a fake, python will accumulate all values
     # but the last in resource, so post-parsing is needed.
@@ -86,7 +88,12 @@ def parse_mistest_args(argv):
 
     if len(resources) < 1:
         resources.append("local")
+
+    if len(resources) > 1:
         output.set_prefix_with_resource(True)
+
+    if args.immediate_output:
+        output.set_immediate(True)
 
     return (resources, top_level_suite, output)
 
