@@ -17,7 +17,7 @@
 import logging
 import os
 import subprocess
-import tap
+from tap import *
 import executor
 from xml.etree.ElementTree import Element
 
@@ -64,7 +64,8 @@ class Case:
     Will fork and execute a provided test case, parsing the stdout during
     execution."""
 
-    def __init__(self, file, directives=None, suite=None, result_queue=None):
+    def __init__(self, file, sequence=None, directives=None, parent=None,
+                 result_queue=None):
         if not os.path.isfile(file):
             raise CaseNotExecutable("No such test case " + file)
         if not os.access(file, os.X_OK):
@@ -73,8 +74,9 @@ class Case:
         self.file = file
         self.directives = directives
         self.popen = None
-        self.suite = suite
+        self.parent = parent
         self.execution_results = []
+        self.sequence = sequence
 
     def __generate_args(self, directives):
         arguments = []
@@ -97,7 +99,7 @@ class Case:
 
                 # Handle plans, must be at the start of streaming
                 # testcases
-                if isinstance(tap_output, tap.Plan):
+                if isinstance(tap_output, Plan):
                     if streaming and result.planned:
                         executor.put(result)
                         result = CaseExecutionResult()
@@ -112,7 +114,7 @@ class Case:
                     return
 
                 # Accumulate output in counters
-                if isinstance(tap_output, tap.TestLine):
+                if isinstance(tap_output, TestLine):
                     result.run += 1
                     if tap_output.ok:
                         result.ok += 1
@@ -153,20 +155,27 @@ class Case:
         element.attrib['name'] = self.junit_name()
         if len(self) == 1:
             for tap in self.execution_results[0]:
-                element.append(tap.junit())
+                if isinstance(tap, TestLine):
+                    element.append(tap.junit())
 
         return element
 
     def junit_name(self):
         junit_name = ""
 
-        if self.suite:
-            parent_junit_name = self.suite.junit_name()
-            if parent_junit_name:
-                junit_name += parent_junit_name + "."
+        parent_junit_name = self.parent.junit_name()
+        if parent_junit_name:
+            junit_name += parent_junit_name + '.'
 
-        junit_name += self.file.replace('.','_')
-        print(junit_name)
+        # Add a numbering onto the tests to retain order
+        digits = len(str(len(self.parent)))
+        digits += 1
+        count_str = str(self.sequence).zfill(digits)
+
+        basename = os.path.basename(self.file)
+        basename = basename[0:basename.find('.')]
+        junit_name += count_str + '_' + basename
+
         return junit_name
 
 

@@ -1,3 +1,4 @@
 #!/usr/bin/python
 
-print("1..0")
+print("1..1")
+print("not ok 1 - not feeling good")

@@ -40,14 +40,14 @@ class Suite:
     Will read a test suite and generate a corresponding
     object."""
 
-    def __init__(self, file=None, stream=None, name=None, suite=None,
-                 top_level_suite=False):
+    def __init__(self, file=None, stream=None, name=None, sequence=None,
+                 parent=None):
 
         self.dependencies = []
         self.directives = []
         self.test_list = []
-        self.suite = suite
-        self.top_level_suite = top_level_suite
+        self.parent = parent
+        self.sequence = sequence
 
         if name:
             self.name = name
@@ -80,37 +80,50 @@ class Suite:
     def append(self, test):
         if test.endswith('.yaml'):
             try:
-                self.test_list.append(Suite(self.dir + "/" + test, suite=self))
+                self.test_list.append(Suite(self.dir + "/" + test,
+                                            sequence=len(self.test_list) + 1,
+                                            parent=self))
             except Exception as e:
                 raise SubSuiteException(str(e))
         else:
-            self.test_list.append(case.Case(self.dir + "/" + test, suite=self))
+            self.test_list.append(case.Case(self.dir + "/" + test,
+                                            sequence=len(self.test_list) + 1,
+                                            parent=self))
 
     def junit(self):
         element = Element('testsuite')
 
-        if not self.top_level_suite:
+        if self.parent:
             element.attrib['name'] = self.junit_name()
 
         for test in self.test_list:
-            element.append(test.junit())
+            test_junit = test.junit()
+            element.append(test_junit)
 
         return element
 
     def junit_name(self):
         # This is an aesthetic decision, do not include the top level
         # suite in junit output.
-        if self.top_level_suite:
+        if not self.parent:
             return None
 
         junit_name = ""
 
-        if self.suite:
-            parent_junit_name = self.suite.junit_name()
+        if self.parent:
+            parent_junit_name = self.parent.junit_name()
             if parent_junit_name:
-                junit_name += parent_junit_name + "."
+                junit_name += parent_junit_name + '.'
 
-        junit_name += self.name.replace('.','_')
+        # Add a numbering onto the tests to retain order
+        digits = len(str(len(self.parent)))
+        digits += 1
+        count_str = str(self.sequence).zfill(digits)
+
+        basename = os.path.basename(self.name)
+        basename = basename[0:basename.find('.')]
+        junit_name += count_str + '_' + basename
+
         return junit_name
 
     def __iter__(self):
@@ -120,6 +133,9 @@ class Suite:
                     yield suite_test
             else:
                 yield test
+
+    def __len__(self):
+        return len(self.test_list)
 
     def __str__(self):
         return self.name

@@ -67,7 +67,7 @@ class TestLine(Tap):
         test_line = ("ok" if self.ok else "not ok") + " " + str(self.number)
 
         if self.description:
-            test_line += " " + self.description
+            test_line += " - " + self.description
 
         if self.directive:
             test_line += " # " + self.directive
@@ -79,10 +79,11 @@ class TestLine(Tap):
 
     def junit(self):
         element = Element('testcase')
-        if self.description:
-            description = Element('system-out')
-            description.text = self.description
-            element.append(description)
+        element.attrib['name'] = str(self)
+
+        if not self.ok:
+            failed = Element('failure')
+            element.append(failed)
 
         return element
 
