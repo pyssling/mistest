@@ -26,12 +26,16 @@ class Output:
     def __init__(self):
         self.immediate = True
         self.prefix_with_resource = False
+        self.junit_xml = None
 
     def set_immediate(self, immediate):
         self.immediate = immediate
 
     def set_prefix_with_resource(self, prefix):
         self.prefix_with_resource = prefix
+
+    def set_junit_xml(self, junit_xml):
+        self.junit_xml = junit_xml
 
     def format_result(self, result):
         output_str = ""
@@ -58,8 +62,9 @@ class Output:
         element = Element('testsuites')
         element.append(suite.junit())
         tree = ElementTree(element)
-        tree.write('junit.xml')
+        tree.write(self.junit_xml)
 
     def postprocess(self, suite):
-        self.output_junit_xml(suite)
+        if self.junit_xml:
+            self.output_junit_xml(suite)
 

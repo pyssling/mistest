@@ -72,6 +72,8 @@ def parse_mistest_args(argv):
     parser.add_argument('test', nargs='+', help='A suite or test case.')
     parser.add_argument('--immediate-output', action='store_true',
                         help='Print output immediately, even during parallel execution')
+    parser.add_argument('--junit-xml', '-j', help='Generate a junit xml file')
+
 
     args = parser.parse_args(argv[1:])
 
@@ -91,6 +93,9 @@ def parse_mistest_args(argv):
 
     if len(resources) > 1:
         output.set_prefix_with_resource(True)
+
+    if args.junit_xml:
+        output.set_junit_xml(args.junit_xml)
 
     if args.immediate_output:
         output.set_immediate(True)
