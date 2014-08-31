@@ -25,7 +25,7 @@ from scheduler import *
 from output import Output
 
 def parse_separated(resources_and_tests):
-    top_level_suite = suite.Suite(name="Top level suite")
+    top_level_suite = suite.Suite(name="Top level suite", top_level_suite=True)
     resources = resources_and_tests[0:resources_and_tests.index('-')]
 
     for test in resources_and_tests[resources_and_tests.index('-') + 1:]:
@@ -40,7 +40,7 @@ def parse_separated(resources_and_tests):
     return (resources, top_level_suite)
 
 def parse_unseparated(resources_and_tests):
-    top_level_suite = suite.Suite(name="Top level suite")
+    top_level_suite = suite.Suite(name="Top level suite", top_level_suite=True)
     resources = []
 
     args_are_resources = True
@@ -101,3 +101,4 @@ def parse_mistest_args(argv):
 # Main function
 (resources, top_level_suite, output) = parse_mistest_args(sys.argv)
 schedule_tests(resources, top_level_suite, output)
+output.postprocess(top_level_suite)

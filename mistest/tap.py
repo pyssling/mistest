@@ -18,6 +18,7 @@ import io
 import re
 import ply.lex as lex
 import ply.yacc as yacc
+from xml.etree.ElementTree import Element
 
 class Tap:
     pass
@@ -40,6 +41,11 @@ class Plan(Tap):
             plan += " # " + str(self.diagnostic)
 
         return plan
+
+    def junit(self):
+        element = Element('system-err')
+
+        return element
 
 class TestLine(Tap):
     """A TAP test line
@@ -71,6 +77,15 @@ class TestLine(Tap):
 
         return test_line
 
+    def junit(self):
+        element = Element('testcase')
+        if self.description:
+            description = Element('system-out')
+            description.text = self.description
+            element.append(description)
+
+        return element
+
 class Diagnostic(Tap):
     """A TAP diagnostic
 
@@ -82,6 +97,11 @@ class Diagnostic(Tap):
 
     def __str__(self):
         return "# " + self.diagnostic
+
+    def junit(self):
+        element = Element('system-out')
+
+        return element
 
 # Tap error classes
 class NumberingError(Exception):

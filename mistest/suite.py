@@ -18,6 +18,7 @@ import io
 import yaml
 import os
 import case
+from xml.etree.ElementTree import Element
 
 class SuiteParseException(Exception):
     """Failed to create a suite instance"""
@@ -39,11 +40,14 @@ class Suite:
     Will read a test suite and generate a corresponding
     object."""
 
-    def __init__(self, file=None, stream=None, name=None):
+    def __init__(self, file=None, stream=None, name=None, suite=None,
+                 top_level_suite=False):
 
         self.dependencies = []
         self.directives = []
         self.test_list = []
+        self.suite = suite
+        self.top_level_suite = top_level_suite
 
         if name:
             self.name = name
@@ -76,11 +80,38 @@ class Suite:
     def append(self, test):
         if test.endswith('.yaml'):
             try:
-                self.test_list.append(Suite(self.dir + "/" + test))
+                self.test_list.append(Suite(self.dir + "/" + test, suite=self))
             except Exception as e:
                 raise SubSuiteException(str(e))
         else:
-            self.test_list.append(case.Case(self.dir + "/" + test))
+            self.test_list.append(case.Case(self.dir + "/" + test, suite=self))
+
+    def junit(self):
+        element = Element('testsuite')
+
+        if not self.top_level_suite:
+            element.attrib['name'] = self.junit_name()
+
+        for test in self.test_list:
+            element.append(test.junit())
+
+        return element
+
+    def junit_name(self):
+        # This is an aesthetic decision, do not include the top level
+        # suite in junit output.
+        if self.top_level_suite:
+            return None
+
+        junit_name = ""
+
+        if self.suite:
+            parent_junit_name = self.suite.junit_name()
+            if parent_junit_name:
+                junit_name += parent_junit_name + "."
+
+        junit_name += self.name.replace('.','_')
+        return junit_name
 
     def __iter__(self):
         for test in self.test_list:

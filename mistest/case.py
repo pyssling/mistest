@@ -19,6 +19,7 @@ import os
 import subprocess
 import tap
 import executor
+from xml.etree.ElementTree import Element
 
 class CaseNotExecutable(Exception):
     """Test case is not executable"""
@@ -41,7 +42,7 @@ class CaseExecutionResult:
         self.tap_list.append(tap)
 
     def __iter__(self):
-        for tap in tap_list:
+        for tap in self.tap_list:
             yield tap
 
     def __str__(self):
@@ -72,7 +73,7 @@ class Case:
         self.file = file
         self.directives = directives
         self.popen = None
-        self.suite = None
+        self.suite = suite
         self.execution_results = []
 
     def __generate_args(self, directives):
@@ -147,9 +148,34 @@ class Case:
     def put(self, execution_result):
         self.execution_results.append(execution_result)
 
+    def junit(self):
+        element = Element('testsuite')
+        element.attrib['name'] = self.junit_name()
+        if len(self) == 1:
+            for tap in self.execution_results[0]:
+                element.append(tap.junit())
+
+        return element
+
+    def junit_name(self):
+        junit_name = ""
+
+        if self.suite:
+            parent_junit_name = self.suite.junit_name()
+            if parent_junit_name:
+                junit_name += parent_junit_name + "."
+
+        junit_name += self.file.replace('.','_')
+        print(junit_name)
+        return junit_name
+
+
     def __iter__(self):
-        for execution_result in execution_results:
+        for execution_result in self.execution_results:
             yield execution_result
+
+    def __len__(self):
+        return len(self.execution_results)
 
 def looks_like_a_case(file):
     if os.access(file, os.X_OK):

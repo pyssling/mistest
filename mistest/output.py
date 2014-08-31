@@ -16,6 +16,7 @@
 
 from tap import *
 from case import *
+from xml.etree.ElementTree import *
 
 class Output:
     """The output class
@@ -31,9 +32,6 @@ class Output:
 
     def set_prefix_with_resource(self, prefix):
         self.prefix_with_resource = prefix
-
-    def post_process(self):
-        pass
 
     def format_result(self, result):
         output_str = ""
@@ -55,3 +53,13 @@ class Output:
 
         if isinstance(result, CaseExecutionResult):
             print(self.format_result(result))
+
+    def output_junit_xml(self, suite):
+        element = Element('testsuites')
+        element.append(suite.junit())
+        tree = ElementTree(element)
+        tree.write('junit.xml')
+
+    def postprocess(self, suite):
+        self.output_junit_xml(suite)
+
