@@ -33,7 +33,6 @@ class Output:
 
     def set_prefix_with_resource(self, prefix):
         self.prefix_with_resource = prefix
-
     def set_junit_xml(self, junit_xml):
         self.junit_xml = junit_xml
 
@@ -64,7 +63,13 @@ class Output:
         tree = ElementTree(element)
         tree.write(self.junit_xml)
 
+    def output_execution_summary(self, suite):
+        print("# Execution summary: ")
+#        print("# Ran: " + str(suite.total) + " Passed: " + str(suite.passed) + \
+#            " Skipped: " + str(suite.skipped) + " Failed: " + str(suite.failed))
+
     def postprocess(self, suite):
+        self.output_execution_summary(suite)
         if self.junit_xml:
             self.output_junit_xml(suite)
 

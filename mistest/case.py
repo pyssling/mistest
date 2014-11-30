@@ -18,47 +18,50 @@ import logging
 import os
 import subprocess
 from tap import *
-import executor
 from xml.etree.ElementTree import Element
+from test import *
 
 class CaseNotExecutable(Exception):
     """Test case is not executable"""
     pass
 
-class CaseExecutionResult:
+class CaseExecutionResult(TestExecutionResult):
     """The result of a test case execution run"""
 
     def __init__(self, case):
+        TestExecutionResult.__init__(self, case)
         self.case = case
         self.planned = None
-        self.run = 0
+        self.ran = 0
         self.ok = 0
+        self.not_ok = 0
         self.skip = 0
         self.todo = 0
         self.failed = None
         self.tap_list = []
 
-    def put(self, tap):
-        self.tap_list.append(tap)
-
     def __iter__(self):
         for tap in self.tap_list:
             yield tap
 
+    def append(self, tap):
+        self.tap_list.append(tap)
+
     def __str__(self):
-        result = ""
+        result = "# "
         if self.failed:
-            return "failed: " + str(self.failed)
+            return "# failed: " + str(self.failed)
 
         if self.planned is not None:
             result += "planned: " + str(self.planned) + " "
-        result += "run: " + str(self.run) + " "
+        result += "ran: " + str(self.ran) + " "
         result += "ok: " + str(self.ok) + " "
+        result += "not ok: " + str(self.not_ok) + " "
         result += "skip: " + str(self.skip) + " "
-        result += "todo: " + str(self.todo) + " "
+        result += "todo: " + str(self.todo)
         return result
 
-class Case:
+class Case(Test):
     """A test case
 
     Will fork and execute a provided test case, parsing the stdout during
@@ -89,52 +92,7 @@ class Case:
 
         return arguments
 
-    def __generate_results(self, stream, executor, streaming):
-
-        parser = executor.parser(stream)
-        result = CaseExecutionResult(self)
-
-        try:
-            for tap_output in parser:
-
-                # Handle plans, must be at the start of streaming
-                # testcases
-                if isinstance(tap_output, Plan):
-                    if streaming and result.planned:
-                        executor.put(result)
-                        result = CaseExecutionResult()
-
-                    result.planned = tap_output.number
-
-                # A testcase that doesn't start with a plan during
-                # streaming causes a failure.
-                if streaming and not result.planned:
-                    result.failed = "No plan at start of streaming test case"
-                    executor.put(result)
-                    return
-
-                # Accumulate output in counters
-                if isinstance(tap_output, TestLine):
-                    result.run += 1
-                    if tap_output.ok:
-                        result.ok += 1
-                    if tap_output.directive:
-                        if tap_output.directive == "TODO":
-                            result.todo += 1
-                        if tap_output.directive == "SKIP":
-                            result.skip += 1
-
-                # Send output to the executor (for possible immediate
-                # output) and also to the result for post processing.
-                executor.put(tap_output)
-                result.put(tap_output)
-
-        except Exception as e:
-            result.failed = str(e)
-
-        executor.put(result)
-
-    def __call__(self, executor, directives=None):
+    def __call__(self, parser, directives=None):
 
         arguments = self.__generate_args(directives)
 
@@ -142,13 +100,44 @@ class Case:
 
         popen = subprocess.Popen(command, stdout=subprocess.PIPE)
 
-        self.__generate_results(popen.stdout, executor, False)
+        # Set the parser input stream
+        parser = parser(popen.stdout)
+        result = CaseExecutionResult(self)
+
+        try:
+            for tap_output in parser:
+
+                # Handle plans
+                if isinstance(tap_output, Plan):
+                    result.planned = tap_output.number
+
+                # Accumulate output in counters
+                if isinstance(tap_output, TestLine):
+                    result.ran += 1
+                    if tap_output.ok:
+                        result.ok += 1
+                    else:
+                        result.not_ok += 1
+
+                    if tap_output.directive:
+                        if tap_output.directive == "TODO":
+                            result.todo += 1
+                        if tap_output.directive == "SKIP":
+                            result.skip += 1
+
+                result.append(tap_output)
+
+                yield tap_output
+
+        except Exception as e:
+            result.failed = str(e)
+
+        self.execution_results.append(result)
+
+        yield result
 
     def __str__(self):
         return self.file
-
-    def put(self, execution_result):
-        self.execution_results.append(execution_result)
 
     def junit(self):
         element = Element('testsuite')

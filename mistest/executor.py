@@ -16,8 +16,8 @@
 
 import threading
 import queue
-import suite
-import case
+from suite import *
+from case import *
 import tap
 
 class ExecutorMessage:
@@ -28,10 +28,6 @@ class ExecutorMessage:
 
     def __str__(self):
         return "Executor Message: " + self.__class__.__name__
-
-class ExecutionComplete(ExecutorMessage):
-    """Executor ran to completion"""
-    pass
 
 class TerminateExecutor(ExecutorMessage):
     """Executor should terminate"""
@@ -55,28 +51,24 @@ class Executor(threading.Thread):
     def queue(self, test_or_message):
         self.test_queue.put(test_or_message)
 
-    def put(self, test_or_message):
-        test_or_message.resource = self.resource
-        self.result_queue.put(test_or_message)
-
     def terminate(self):
         self.test_queue.put(TerminateExecutor())
 
     def __str__(self):
         return str(self.resource)
 
+    def __execute_test(self, test):
+        for result in test(self.parser):
+            result.resource = self.resource
+            result.executor = self
+            self.result_queue.put(result)
+
     def run(self):
         while True:
             test_or_message = self.test_queue.get()
 
-            if isinstance(test_or_message, suite.Suite):
-                for test_case in test_or_message:
-                    result = test_case(self.result_queue)
-
-            elif isinstance(test_or_message, case.Case):
-                test_or_message(self)
+            if isinstance(test_or_message, Test):
+                self.__execute_test(test_or_message)
 
             elif isinstance(test_or_message, TerminateExecutor):
                 break
-
-            self.result_queue.put(ExecutionComplete(self))

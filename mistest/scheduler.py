@@ -18,6 +18,12 @@ import queue
 from case import *
 from executor import *
 from tap import *
+from test import *
+
+class Scheduler:
+
+    def __init__(self):
+        pass
 
 def schedule_tests(resources, suite, output):
 
@@ -38,18 +44,12 @@ def schedule_tests(resources, suite, output):
     while len(executor_list) > 0:
 
         result = result_queue.get()
+        output(result)
 
-        if isinstance(result, Tap):
-            output(result)
-        elif isinstance(result, CaseExecutionResult):
-            result.case.put(result)
-            output(result)
-
-        if isinstance(result, ExecutionComplete):
+        if isinstance(result, TestExecutionResult):
             try:
                 result.executor.queue(next(test_iter))
             except StopIteration:
                 result.executor.terminate()
                 result.executor.join()
                 executor_list.remove(result.executor)
-

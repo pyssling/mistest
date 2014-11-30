@@ -19,6 +19,42 @@ import yaml
 import os
 import case
 from xml.etree.ElementTree import Element
+from test import *
+
+class SuiteExecutionResult(TestExecutionResult):
+    """The result of a test case execution run"""
+
+    def __init__(self, suite):
+        TestExecutionResult.__init__(self, case)
+        self.suite = suite
+        self.planned = None
+        self.ran = 0
+        self.ok = 0
+        self.skip = 0
+        self.todo = 0
+        self.failed = None
+        self.execution_results = []
+
+    def append(self, execution_result):
+        self.execution_results.append(execution_result)
+
+    def __iter__(self):
+        for execution_result in self.execution_results:
+            yield execution_result
+
+    def __str__(self):
+        result = "# "
+        if self.failed:
+            return "# failed: " + str(self.failed)
+
+        if self.planned is not None:
+            result += "planned: " + str(self.planned) + " "
+        result += "ran: " + str(self.ran) + " "
+        result += "ok: " + str(self.ok) + " "
+        result += "skip: " + str(self.skip) + " "
+        result += "todo: " + str(self.todo) + " "
+        return result
+
 
 class SuiteParseException(Exception):
     """Failed to create a suite instance"""
@@ -34,7 +70,7 @@ class Directives:
     def __init__(self, directives_list):
         pass
 
-class Suite:
+class Suite(Test):
     """A test suite parser
 
     Will read a test suite and generate a corresponding
@@ -125,6 +161,26 @@ class Suite:
         junit_name += count_str + '_' + basename
 
         return junit_name
+
+    def __call__(self, parser):
+        """Run the test suite
+
+        Executing one test case at a time and yielding each result.
+        Retain the hierarchy of suites and cases by only saving
+        the exection results from tests and suites inside the current
+        suite.
+        """
+        execution_result = SuiteExecutionResult(self)
+
+        for test in self:
+            for result in test(parser):
+                try:
+                    if result.test in self.test_list:
+                        execution_result.append(result)
+                except:
+                    pass
+
+                yield(result)
 
     def __iter__(self):
         for test in self.test_list:
