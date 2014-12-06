@@ -25,15 +25,8 @@ class SuiteExecutionResult(TestExecutionResult):
     """The result of a test case execution run"""
 
     def __init__(self, suite):
-        TestExecutionResult.__init__(self, case)
+        TestExecutionResult.__init__(self, suite)
         self.suite = suite
-        self.planned = None
-        self.ran = 0
-        self.ok = 0
-        self.skip = 0
-        self.todo = 0
-        self.failed = None
-        self.execution_results = []
 
     def append(self, execution_result):
         self.execution_results.append(execution_result)
@@ -76,8 +69,9 @@ class Suite(Test):
     Will read a test suite and generate a corresponding
     object."""
 
-    def __init__(self, file=None, stream=None, name=None, sequence=None,
-                 parent=None):
+    def __init__(self, file=None, sequence=None, parent=None, stream=None, name=None):
+
+        Test.__init__(self)
 
         self.dependencies = []
         self.directives = []

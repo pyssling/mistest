@@ -22,34 +22,68 @@ from test import *
 
 class Scheduler:
 
-    def __init__(self):
-        pass
+    def __init__(self, resources, suite, output):
+        self.resources = resources
+        self.suite = suite
+        self.output = output
 
-def schedule_tests(resources, suite, output):
+        self.result_queue = queue.Queue()
 
-    # Create the executors
-    result_queue = queue.Queue()
-    test_iter = iter(suite)
-    executor_list = []
-    for resource in resources:
-        test_executor = Executor(resource, result_queue)
-        try:
-            test_executor.queue(next(test_iter))
-        except StopIteration:
-            break
-        test_executor.start()
-        executor_list.append(test_executor)
+        self.executors = {}
+        for resource in resources:
+            self.executors[resource] = Executor(resource, self.result_queue)
+            self.executors[resource].start()
 
-    # Schedule tests until we run out
-    while len(executor_list) > 0:
+        self.scheduled_tests = {}
+        for resource in resources:
+            self.scheduled_tests[resource] = None
 
-        result = result_queue.get()
-        output(result)
+    def wait_for_free_resource(self):
+        while True:
+            result = self.result_queue.get()
+            self.output(result)
 
-        if isinstance(result, TestExecutionResult):
-            try:
-                result.executor.queue(next(test_iter))
-            except StopIteration:
-                result.executor.terminate()
-                result.executor.join()
-                executor_list.remove(result.executor)
+            if isinstance(result, TestExecutionResult):
+                #result.collate()
+
+                resource = str(result.executor)
+                if result.test == self.scheduled_tests[resource]:
+                    self.scheduled_tests[resource] = None
+                    return resource
+
+
+    def get_free_resources(self):
+        """Get a list of free resources available to this scheduler"""
+
+        # First see if there are any free resources without scheduled tests
+        free_resources = []
+        for resource in self.resources:
+            if self.scheduled_tests[resource] == None:
+                free_resources.append(resource)
+
+        if len(free_resources) > 0:
+            return free_resources
+
+        # Otherwise wait for a resource to become free
+        return [ self.wait_for_free_resource() ]
+
+    def schedule_test(self, resource, test):
+        """Schedule a test on a specific resource"""
+        self.scheduled_tests[resource] = test
+        self.executors[resource].queue(test)
+
+
+    def __call__(self):
+        """Start scheduling tests
+
+        This is a simple scheduler method that other schedulers
+        should overload to implement better scheduling algorithms."""
+
+        # Run all the tests
+        for test in self.suite:
+            free_resources = self.get_free_resources()
+            self.schedule_test(free_resources[0], test)
+
+        # Wait for all the resources to become free
+        while set(self.resources) != set(self.get_free_resources()):
+            self.wait_for_free_resource()

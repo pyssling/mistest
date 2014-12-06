@@ -17,15 +17,36 @@
 class TestExecutionResult:
     """An execution result template class
 
-    A general form for other execution classes to inherit."""
+    A general form for other test execution result classes to inherit.
+    Multiple TestExecutionResults may exist for each test"""
 
     def __init__(self, test):
-        """Initialize the ExecutionResult
+        """Initialize the TestExecutionResult
 
         Initialization takes as argument the test that created the result."""
         self.test = test
+        self.planned = None
+        self.ran = 0
+        self.ok = 0
+        self.not_ok = 0
+        self.skip = 0
+        self.todo = 0
+        self.failed = None
 
 class Test:
     """A test template class
 
     A general form for other test classes to inherit"""
+
+    def __init__(self):
+        """Initialize the Test
+
+        Create variables common to all tests."""
+
+        self.planned = None
+        self.ran = 0
+        self.ok = 0
+        self.not_ok = 0
+        self.skip = 0
+        self.todo = 0
+        self.failed = None

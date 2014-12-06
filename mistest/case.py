@@ -31,13 +31,6 @@ class CaseExecutionResult(TestExecutionResult):
     def __init__(self, case):
         TestExecutionResult.__init__(self, case)
         self.case = case
-        self.planned = None
-        self.ran = 0
-        self.ok = 0
-        self.not_ok = 0
-        self.skip = 0
-        self.todo = 0
-        self.failed = None
         self.tap_list = []
 
     def __iter__(self):
@@ -61,14 +54,17 @@ class CaseExecutionResult(TestExecutionResult):
         result += "todo: " + str(self.todo)
         return result
 
+
 class Case(Test):
     """A test case
 
     Will fork and execute a provided test case, parsing the stdout during
     execution."""
 
-    def __init__(self, file, sequence=None, directives=None, parent=None,
-                 result_queue=None):
+    def __init__(self, file, sequence, parent, directives=None):
+
+        Test.__init__(self)
+
         if not os.path.isfile(file):
             raise CaseNotExecutable("No such test case " + file)
         if not os.access(file, os.X_OK):

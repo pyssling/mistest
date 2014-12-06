@@ -105,5 +105,6 @@ def parse_mistest_args(argv):
 
 # Main function
 (resources, top_level_suite, output) = parse_mistest_args(sys.argv)
-schedule_tests(resources, top_level_suite, output)
+scheduler = Scheduler(resources, top_level_suite, output)
+scheduler()
 output.postprocess(top_level_suite)

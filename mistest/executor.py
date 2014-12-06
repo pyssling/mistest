@@ -55,7 +55,7 @@ class Executor(threading.Thread):
         self.test_queue.put(TerminateExecutor())
 
     def __str__(self):
-        return str(self.resource)
+        return self.resource
 
     def __execute_test(self, test):
         for result in test(self.parser):
