@@ -31,7 +31,6 @@ class Plan(Tap):
     as a possible diagnostic of the Diagnostic class"""
 
     def __init__(self, number, diagnostic):
-        self.type = 'plan'
         self.number = number
         self.diagnostic = diagnostic
 
@@ -56,7 +55,6 @@ class TestLine(Tap):
 
     def __init__(self, ok, number, description, \
                  directive, directive_description):
-        self.type = 'test_line'
         self.ok = ok
         self.number = number
         self.description = description
@@ -93,7 +91,6 @@ class Diagnostic(Tap):
     Typically a comment from the test case relating progress information."""
 
     def __init__(self, diagnostic):
-        self.type = 'diagnostic'
         self.diagnostic = diagnostic
 
     def __str__(self):

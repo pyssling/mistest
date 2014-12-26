@@ -103,8 +103,9 @@ def parse_mistest_args(argv):
     return (resources, top_level_suite, output)
 
 
-# Main function
-(resources, top_level_suite, output) = parse_mistest_args(sys.argv)
-scheduler = Scheduler(resources, top_level_suite, output)
-scheduler()
-output.postprocess(top_level_suite)
+if __name__ == '__main__':
+    (resources, top_level_suite, output) = parse_mistest_args(sys.argv)
+    scheduler = Scheduler(resources, top_level_suite, output)
+    scheduler()
+    result = top_level_suite.generate_result()
+    output.postprocess(result)

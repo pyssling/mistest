@@ -31,22 +31,42 @@ class SuiteExecutionResult(TestExecutionResult):
     def append(self, execution_result):
         self.execution_results.append(execution_result)
 
-    def __iter__(self):
-        for execution_result in self.execution_results:
-            yield execution_result
+class SuiteResult(TestResult):
+    """The aggregated result of a test suite"""
+
+    def __init__(self, suite, test_results):
+        TestResult.__init__(self, suite)
+        self.suite = suite
+        self.test_results = test_results
+
+        for result in test_results:
+            if result.ok == False:
+                self.ok = False
 
     def __str__(self):
-        result = "# "
-        if self.failed:
-            return "# failed: " + str(self.failed)
+        test_line = ("ok" if self.ok else "not ok") + " " + str(self.number)
 
-        if self.planned is not None:
-            result += "planned: " + str(self.planned) + " "
-        result += "ran: " + str(self.ran) + " "
-        result += "ok: " + str(self.ok) + " "
-        result += "skip: " + str(self.skip) + " "
-        result += "todo: " + str(self.todo) + " "
-        return result
+        if self.description:
+            test_line += " - " + self.description
+
+        if self.directive:
+            test_line += " # " + self.directive
+
+            if self.directive_description:
+                test_line += " " + self.directive_description
+
+    def junit(self):
+        element = Element('testsuite')
+
+        # Only add a name if we are not the top level suite
+        # which is for all intents and purposes anonymous
+        if self.suite.parent:
+            element.attrib['name'] = self.suite.junit_name()
+
+        for result in self.test_results:
+            element.append(result.junit())
+
+        return element
 
 
 class SuiteParseException(Exception):
@@ -120,18 +140,6 @@ class Suite(Test):
                                             sequence=len(self.test_list) + 1,
                                             parent=self))
 
-    def junit(self):
-        element = Element('testsuite')
-
-        if self.parent:
-            element.attrib['name'] = self.junit_name()
-
-        for test in self.test_list:
-            test_junit = test.junit()
-            element.append(test_junit)
-
-        return element
-
     def junit_name(self):
         # This is an aesthetic decision, do not include the top level
         # suite in junit output.
@@ -155,6 +163,11 @@ class Suite(Test):
         junit_name += count_str + '_' + basename
 
         return junit_name
+
+    def generate_result(self):
+        test_results = [ test.generate_result() for test in self.test_list ]
+        self.result = SuiteResult(self, test_results)
+        return self.result
 
     def __call__(self, parser):
         """Run the test suite

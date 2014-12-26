@@ -68,8 +68,8 @@ class Output:
 #        print("# Ran: " + str(suite.total) + " Passed: " + str(suite.passed) + \
 #            " Skipped: " + str(suite.skipped) + " Failed: " + str(suite.failed))
 
-    def postprocess(self, suite):
-        self.output_execution_summary(suite)
+    def postprocess(self, result):
+        self.output_execution_summary(result)
         if self.junit_xml:
-            self.output_junit_xml(suite)
+            self.output_junit_xml(result)
 

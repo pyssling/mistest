@@ -25,35 +25,153 @@ class CaseNotExecutable(Exception):
     """Test case is not executable"""
     pass
 
+
 class CaseExecutionResult(TestExecutionResult):
     """The result of a test case execution run"""
 
     def __init__(self, case):
         TestExecutionResult.__init__(self, case)
-        self.case = case
         self.tap_list = []
+
+    def __len__(self):
+        if self.planned == None:
+            return 0
+        else:
+            return self.planned
+
+    def __getitem__(self, key):
+        try:
+            if key > (len(self) + 1) or key < 1:
+                raise IndexError()
+        except:
+            raise IndexError()
+
+        for tap in self.tap_list:
+            if isinstance(tap, TestLine):
+                if key == tap.number:
+                    return tap
+
+        # If not all tests in the case were run.
+        return None
 
     def __iter__(self):
         for tap in self.tap_list:
-            yield tap
+            if isinstance(tap, TestLine):
+                yield tap
 
     def append(self, tap):
         self.tap_list.append(tap)
 
+
+class CaseInconsistentPlan(Exception):
+    """Test case has inconsisten plane"""
+    pass
+
+class CaseTestLineAggregate(Tap):
+    """A TAP test line aggregate
+
+    Contains an ok which is either True or False,
+    a number which is the test number in the sequence,
+    a description and a directive and directive description."""
+
+    def __init__(self, number, test_lines):
+        """Initialize by aggregating the test lines
+
+        Some aggregation is deffered such as creating string representations."""
+        self.number = number
+        self.test_lines = test_lines
+        self.description = None
+        self.directive = None
+
+        self.ok = True
+        skip_count = 0
+        todo_count = 0
+        for line in test_lines:
+            # A single not ok makes everything not ok
+            if line.ok == False:
+                self.ok = False
+
+            # Accumulate directives
+            if line.directive == "TODO":
+                todo_count += 1
+
+            if line.directive == "SKIP":
+                skip_count += 1
+
+        if todo_count == len(test_lines):
+            self.directive = "TODO"
+        elif skip_count == len(test_lines):
+            self.directive = "SKIP"
+
     def __str__(self):
-        result = "# "
-        if self.failed:
-            return "# failed: " + str(self.failed)
+        test_line = ("ok" if self.ok else "not ok") + " " + str(self.number)
 
-        if self.planned is not None:
-            result += "planned: " + str(self.planned) + " "
-        result += "ran: " + str(self.ran) + " "
-        result += "ok: " + str(self.ok) + " "
-        result += "not ok: " + str(self.not_ok) + " "
-        result += "skip: " + str(self.skip) + " "
-        result += "todo: " + str(self.todo)
-        return result
+        if self.description:
+            test_line += " - " + self.description
 
+        if self.directive:
+            test_line += " # " + self.directive
+
+            if self.directive_description:
+                test_line += " " + self.directive_description
+
+        return test_line
+
+    def junit(self):
+        element = Element('testcase')
+        element.attrib['name'] = str(self)
+
+        if not self.ok:
+            failed = Element('failure')
+            element.append(failed)
+
+        return element
+
+
+class CaseResult(TestResult):
+    """The aggregated result of a test case"""
+
+    def __init__(self, case, execution_results):
+        TestResult.__init__(self, case)
+        self.tap_aggregate_list = []
+        self.execution_results = execution_results
+
+    def __len__(self):
+        if len(self.execution_results) == 0:
+            return 0
+
+        planned = self.execution_results[0].planned
+        for result in self.execution_results:
+            if result.planned != planned:
+                raise CaseInconsistentPlan()
+
+        return planned
+
+    def __getitem__(self, key):
+        try:
+            if key > (len(self) + 1) or key < 1:
+                raise IndexError()
+        except:
+            raise IndexError()
+
+        if len(self.tap_aggregate_list) != len(self):
+            for i in range(1, len(self) + 1):
+                test_lines = [ result[i] for result in self.execution_results ]
+                test_lines_aggregate = CaseTestLineAggregate(i, test_lines)
+                self.tap_aggregate_list.append(test_lines_aggregate)
+
+        return self.tap_aggregate_list[key - 1]
+
+    def junit(self):
+        element = Element('testsuite')
+        element.attrib['name'] = self.test.junit_name()
+        for i in range(1, len(self) + 1):
+            element.append(self[i].junit())
+
+        return element
+
+    def append(self, execution_result):
+        self.execution_results.append(execution_result)
 
 class Case(Test):
     """A test case
@@ -76,6 +194,10 @@ class Case(Test):
         self.parent = parent
         self.execution_results = []
         self.sequence = sequence
+
+    def generate_result(self):
+        self.result = CaseResult(self, self.execution_results)
+        return self.result
 
     def __generate_args(self, directives):
         arguments = []
@@ -134,16 +256,6 @@ class Case(Test):
 
     def __str__(self):
         return self.file
-
-    def junit(self):
-        element = Element('testsuite')
-        element.attrib['name'] = self.junit_name()
-        if len(self) == 1:
-            for tap in self.execution_results[0]:
-                if isinstance(tap, TestLine):
-                    element.append(tap.junit())
-
-        return element
 
     def junit_name(self):
         junit_name = ""

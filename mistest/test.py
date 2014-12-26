@@ -14,11 +14,10 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-class TestExecutionResult:
-    """An execution result template class
+class TestResult:
+    """A test result template class
 
-    A general form for other test execution result classes to inherit.
-    Multiple TestExecutionResults may exist for each test"""
+    A general form for other test result classes to inherit."""
 
     def __init__(self, test):
         """Initialize the TestExecutionResult
@@ -33,20 +32,28 @@ class TestExecutionResult:
         self.todo = 0
         self.failed = None
 
+    def __str__(self):
+        result = "# "
+        if self.failed:
+            return "# failed: " + str(self.failed)
+
+        if self.planned is not None:
+            result += "planned: " + str(self.planned) + " "
+        result += "ran: " + str(self.ran) + " "
+        result += "ok: " + str(self.ok) + " "
+        result += "skip: " + str(self.skip) + " "
+        result += "todo: " + str(self.todo) + " "
+        return result
+
+
+class TestExecutionResult(TestResult):
+    """A test execution result template class
+
+    A general form for other test execution result classes to inherit.
+    Multiple TestExecutionResults may exist for each test"""
+
+
 class Test:
     """A test template class
 
     A general form for other test classes to inherit"""
-
-    def __init__(self):
-        """Initialize the Test
-
-        Create variables common to all tests."""
-
-        self.planned = None
-        self.ran = 0
-        self.ok = 0
-        self.not_ok = 0
-        self.skip = 0
-        self.todo = 0
-        self.failed = None
