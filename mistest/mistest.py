@@ -27,21 +27,28 @@ from output import Output
 def parse_separated(resources_and_tests):
     top_level_suite = suite.Suite(name="Top level suite")
     resources = resources_and_tests[0:resources_and_tests.index('-')]
+    sequence = 1
 
     for test in resources_and_tests[resources_and_tests.index('-') + 1:]:
         try:
             if suite.looks_like_a_suite(test) or case.looks_like_a_case(test):
-                top_level_suite.append(test)
+                parsed_suite = suite.parse_yaml_suite(test,
+                                                      parent=top_level_suite,
+                                                      sequence=sequence)
+                top_level_suite.append_test(parsed_suite)
             else:
                 sys.exit(test + " does not appear to be a test case or suite")
         except Exception as e:
                 sys.exit("Error while parsing " + test + ": " + str(e))
+
+        sequence = sequence + 1
 
     return (resources, top_level_suite)
 
 def parse_unseparated(resources_and_tests):
     top_level_suite = suite.Suite(name="Top level suite")
     resources = []
+    sequence = 1
 
     args_are_resources = True
     for test_or_resource in resources_and_tests:
@@ -50,8 +57,12 @@ def parse_unseparated(resources_and_tests):
         try:
             if suite.looks_like_a_suite(test_or_resource) \
                     or case.looks_like_a_case(test_or_resource):
-                top_level_suite.append(test_or_resource)
+                parsed_suite = suite.parse_yaml_suite(test_or_resource,
+                                                      parent=top_level_suite,
+                                                      sequence=sequence)
+                top_level_suite.append_test(parsed_suite)
                 args_are_resources = False
+                sequence = sequence + 1
             elif args_are_resources:
                 resources.append(test_or_resource)
             else:

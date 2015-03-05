@@ -1,6 +1,8 @@
-Directives:
-   - ordered
-Suite:
+Ordering: any
+Dependencies:
+   - installation.py
+   - configuration.py
+Tests:
    - a_test_case.py:
         arguments: -y
    - sub_suite/sub_test_suite.yaml

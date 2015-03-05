@@ -44,16 +44,7 @@ class SuiteResult(TestResult):
                 self.ok = False
 
     def __str__(self):
-        test_line = ("ok" if self.ok else "not ok") + " " + str(self.number)
-
-        if self.description:
-            test_line += " - " + self.description
-
-        if self.directive:
-            test_line += " # " + self.directive
-
-            if self.directive_description:
-                test_line += " " + self.directive_description
+        return ("ok" if self.ok else "not ok") + " " + str(self.suite.sequence) + " - " + str(self.suite)
 
     def junit(self):
         element = Element('testsuite')
@@ -69,14 +60,6 @@ class SuiteResult(TestResult):
         return element
 
 
-class SuiteParseException(Exception):
-    """Failed to create a suite instance"""
-    pass
-
-class SubSuiteException(Exception):
-    """Failed to parse an included suite"""
-    pass
-
 class Directives:
     """Suite or test case directives"""
 
@@ -87,58 +70,30 @@ class Suite(Test):
     """A test suite parser
 
     Will read a test suite and generate a corresponding
-    object."""
+    object.
 
-    def __init__(self, file=None, sequence=None, parent=None, stream=None, name=None):
+    Suites have directives: ordered, un-ordered or concurrent
+    Suites can have dependencies: Depends: with relative path
+    Test cases can have arguments, a list appended
+    Test cases can have a name, a single string.
+    """
+
+    def __init__(self, name, parent=None, sequence=None):
 
         Test.__init__(self)
 
+        self.name = name
         self.dependencies = []
         self.directives = []
         self.test_list = []
         self.parent = parent
         self.sequence = sequence
 
-        if name:
-            self.name = name
-            self.dir = os.curdir
-        elif file:
-            self.name = os.path.relpath(file)
-            self.dir = os.path.dirname(self.name)
-            stream = open(file)
+    def append_test(self, test):
+        self.test_list.append(test)
 
-        if stream:
-            suite = yaml.safe_load(stream)
-        else:
-            suite = {}
-
-        if 'Dependencies' in suite:
-            self.dependencies = suite['Dependencies']
-
-        if 'Directives' in suite:
-            self.directives = suite['Directives']
-
-        if suite:
-            if not 'Suite' in suite:
-                raise SuiteParseException("No suite declaration in suite")
-
-            for test in suite['Suite']:
-                if isinstance(test, dict):
-                    test, directives = test.popitem()
-                self.append(test)
-
-    def append(self, test):
-        if test.endswith('.yaml'):
-            try:
-                self.test_list.append(Suite(self.dir + "/" + test,
-                                            sequence=len(self.test_list) + 1,
-                                            parent=self))
-            except Exception as e:
-                raise SubSuiteException(str(e))
-        else:
-            self.test_list.append(case.Case(self.dir + "/" + test,
-                                            sequence=len(self.test_list) + 1,
-                                            parent=self))
+    def append_dep(self, test):
+        self.dependencies.append(test)
 
     def junit_name(self):
         # This is an aesthetic decision, do not include the top level
@@ -208,3 +163,93 @@ def looks_like_a_suite(file):
         return True
     else:
         return False
+
+class SuiteParseException(Exception):
+    """Failed to create a suite instance"""
+    pass
+
+class SubSuiteException(Exception):
+    """Failed to parse an included suite"""
+    pass
+
+def validate_ordering(ordering):
+    if not isinstance(ordering, str):
+        raise SuiteParseException("Expected a scalar string as ordering")
+    if not ordering.lower() in [ 'sequential', 'any', 'concurrent' ]:
+        raise SuiteParseException("Unknown ordering " + ordering)
+    return ordering.lower()
+
+def parse_yaml_tests(yaml_tests, dir, parent, sequence):
+    if not isinstance(yaml_tests, list):
+        raise SuiteParseException("Expected a list of dependencies")
+
+    tests = []
+
+    for test in yaml_tests:
+
+        arguments = None
+
+        if isinstance(test, str):
+            pass
+        elif isinstance(test, dict):
+            test_dict = test
+            test, parameters = test_dict.popitem()
+            if 'arguments' in parameters:
+                arguments = parameters['arguments']
+
+        else:
+            raise SuiteParseException("Unexpected test format")
+
+        test = os.path.normpath(dir + "/" + test)
+
+        if looks_like_a_suite(test):
+            tests.append(parse_yaml_suite(test, parent, sequence))
+        elif case.looks_like_a_case(test):
+            tests.append(case.Case(test, parent, sequence))
+        else:
+            raise SuiteParseException(test + " does not appear to be a case or a suite")
+
+        sequence = sequence + 1
+
+    return (tests, sequence)
+
+def parse_yaml_suite(file, parent, sequence):
+    name = os.path.normpath(file)
+    dir = os.path.dirname(file)
+    ordering = None
+    dependencies = []
+    tests = []
+    child_sequence = 1
+
+    suite = Suite(file, parent, sequence)
+
+    suite_dict = yaml.safe_load(open(file))
+
+    # lowercase all the keys
+    for key in suite_dict.keys():
+        suite_dict[key.lower()] = suite_dict.pop(key)
+
+    if 'ordering' in suite_dict:
+        ordering = validate_ordering(suite_dict.pop('ordering'))
+
+    if 'dependencies' in suite_dict:
+        (dependencies, child_sequence) = parse_yaml_tests(suite_dict.pop('dependencies'),
+                                                          dir, suite, child_sequence)
+
+    if 'tests':
+        (tests, child_sequence) = parse_yaml_tests(suite_dict.pop('tests'),
+                                                   dir, suite, child_sequence)
+
+    if len(suite_dict) != 0:
+        raise SuiteParseException("Unknown elements in suite: ", map(str, suite_dict.keys()))
+
+    if not tests:
+        raise SuiteParseException("Suite did not contain any tests")
+
+    for test in tests:
+        suite.append_test(test)
+
+    for dep in dependencies:
+        suite.append_dep(dep)
+
+    return suite

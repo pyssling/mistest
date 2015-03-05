@@ -1,5 +1,4 @@
-Directives:
-   - ordered
-Suite:
+Ordering: sequential
+Tests:
    - another_test_case.py:
         arguments: -y

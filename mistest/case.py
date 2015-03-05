@@ -179,7 +179,7 @@ class Case(Test):
     Will fork and execute a provided test case, parsing the stdout during
     execution."""
 
-    def __init__(self, file, sequence, parent, directives=None):
+    def __init__(self, file, parent, sequence, arguments=[], environment=None, name=None):
 
         Test.__init__(self)
 
@@ -188,8 +188,13 @@ class Case(Test):
         if not os.access(file, os.X_OK):
             raise CaseNotExecutable("Test case not executable " + file)
 
+        if not name:
+            name = file
+
         self.file = file
-        self.directives = directives
+        self.arguments = arguments
+        self.environment = environment
+        self.name = name
         self.popen = None
         self.parent = parent
         self.execution_results = []
@@ -199,24 +204,12 @@ class Case(Test):
         self.result = CaseResult(self, self.execution_results)
         return self.result
 
-    def __generate_args(self, directives):
-        arguments = []
+    def __call__(self, parser):
 
-        if self.directives and self.directives.arguments:
-            arguments.append(self.directives.arguments)
+        command = [ self.file ] + self.arguments
 
-        if directives:
-            arguments.append(directives.arguments)
-
-        return arguments
-
-    def __call__(self, parser, directives=None):
-
-        arguments = self.__generate_args(directives)
-
-        command = [ self.file ] + arguments
-
-        popen = subprocess.Popen(command, stdout=subprocess.PIPE)
+        popen = subprocess.Popen(command, stdout=subprocess.PIPE,
+                                 env=self.environment)
 
         # Set the parser input stream
         parser = parser(popen.stdout)
