@@ -204,7 +204,7 @@ class Case(Test):
         self.result = CaseResult(self, self.execution_results)
         return self.result
 
-    def __call__(self, parser):
+    def __call__(self, parser, resource):
 
         command = [ self.file ] + self.arguments
 
@@ -214,6 +214,9 @@ class Case(Test):
         # Set the parser input stream
         parser = parser(popen.stdout)
         result = CaseExecutionResult(self)
+
+        # Create a tap Diagnostic to inform which test case has started
+        yield Diagnostic("Running test case: \"" + self.name + "\" on " + resource)
 
         try:
             for tap_output in parser:

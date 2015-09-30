@@ -83,7 +83,9 @@ def parse_mistest_args(argv):
     parser.add_argument('test', nargs='+', help='A suite or test case.')
     parser.add_argument('--immediate-output', action='store_true',
                         help='Print output immediately, even during parallel execution')
-    parser.add_argument('--junit-xml', '-j', help='Generate a junit xml file')
+    parser.add_argument('--junit-xml', '-x', help='Generate a junit xml file')
+    parser.add_argument('--jobs', '-j', nargs='?', type=int,
+                        default=1, help='Number of parallel local jobs to run')
 
 
     args = parser.parse_args(argv[1:])
@@ -99,8 +101,23 @@ def parse_mistest_args(argv):
 
     output = Output()
 
+    #
+    # Resources
+    #
+
+    # Generate local resource list if more than one local job
+    # with names "local0", "local1" etc.
+    if len(resources) < 1 and args.jobs > 1:
+        for i in range(args.jobs):
+            resources.append('local' + str(i))
+
+    # A single local job results in a resource called "local"
     if len(resources) < 1:
         resources.append("local")
+
+    #
+    # Output
+    #
 
     if len(resources) > 1:
         output.set_prefix_with_resource(True)
@@ -112,7 +129,6 @@ def parse_mistest_args(argv):
         output.set_immediate(True)
 
     return (resources, top_level_suite, output)
-
 
 if __name__ == '__main__':
     (resources, top_level_suite, output) = parse_mistest_args(sys.argv)

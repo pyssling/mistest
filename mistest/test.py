@@ -57,3 +57,6 @@ class Test:
     """A test template class
 
     A general form for other test classes to inherit"""
+
+    def __init__(self):
+        self.ordering = None

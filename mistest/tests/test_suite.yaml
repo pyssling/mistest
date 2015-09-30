@@ -3,6 +3,7 @@ Dependencies:
    - installation.py
    - configuration.py
 Tests:
+   - sleepy_test.sh
    - a_test_case.py:
         arguments: -y
    - sub_suite/sub_test_suite.yaml

@@ -72,7 +72,6 @@ class Scheduler:
         self.scheduled_tests[resource] = test
         self.executors[resource].queue(test)
 
-
     def __call__(self):
         """Start scheduling tests
 

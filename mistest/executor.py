@@ -58,7 +58,7 @@ class Executor(threading.Thread):
         return self.resource
 
     def __execute_test(self, test):
-        for result in test(self.parser):
+        for result in test(self.parser, self.resource):
             result.resource = self.resource
             result.executor = self
             self.result_queue.put(result)

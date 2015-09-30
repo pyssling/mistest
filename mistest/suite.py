@@ -88,12 +88,16 @@ class Suite(Test):
         self.test_list = []
         self.parent = parent
         self.sequence = sequence
+        self.ordering = 'sequential'
 
     def append_test(self, test):
         self.test_list.append(test)
 
     def append_dep(self, test):
         self.dependencies.append(test)
+
+    def set_ordering(self, ordering):
+        self.ordering = ordering
 
     def junit_name(self):
         # This is an aesthetic decision, do not include the top level
@@ -124,7 +128,7 @@ class Suite(Test):
         self.result = SuiteResult(self, test_results)
         return self.result
 
-    def __call__(self, parser):
+    def __call__(self, parser, resource):
         """Run the test suite
 
         Executing one test case at a time and yielding each result.
@@ -135,7 +139,7 @@ class Suite(Test):
         execution_result = SuiteExecutionResult(self)
 
         for test in self:
-            for result in test(parser):
+            for result in test(parser, resource):
                 try:
                     if result.test in self.test_list:
                         execution_result.append(result)
@@ -144,9 +148,12 @@ class Suite(Test):
 
                 yield(result)
 
+        yield(execution_result)
+
     def __iter__(self):
         for test in self.test_list:
-            if isinstance(test, Suite):
+            # Only suites have ordering
+            if test.ordering == 'any':
                 for suite_test in test:
                     yield suite_test
             else:
@@ -175,7 +182,7 @@ class SubSuiteException(Exception):
 def validate_ordering(ordering):
     if not isinstance(ordering, str):
         raise SuiteParseException("Expected a scalar string as ordering")
-    if not ordering.lower() in [ 'sequential', 'any', 'concurrent' ]:
+    if not ordering.lower() in [ 'sequential', 'any' ]:
         raise SuiteParseException("Unknown ordering " + ordering)
     return ordering.lower()
 
@@ -230,7 +237,7 @@ def parse_yaml_suite(file, parent, sequence):
         suite_dict[key.lower()] = suite_dict.pop(key)
 
     if 'ordering' in suite_dict:
-        ordering = validate_ordering(suite_dict.pop('ordering'))
+        suite.ordering = validate_ordering(suite_dict.pop('ordering'))
 
     if 'dependencies' in suite_dict:
         (dependencies, child_sequence) = parse_yaml_tests(suite_dict.pop('dependencies'),
