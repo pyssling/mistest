@@ -58,5 +58,9 @@ class Test:
 
     A general form for other test classes to inherit"""
 
+    # Global dependency dict to look up already parsed dependencies.
+    dependencies = {}
+
     def __init__(self):
         self.ordering = None
+        self.dependencies = []

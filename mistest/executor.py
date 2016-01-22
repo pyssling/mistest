@@ -58,6 +58,10 @@ class Executor(threading.Thread):
         return self.resource
 
     def __execute_test(self, test):
+        print("test dependencies len: " + str(len(test.dependencies)))
+        for test in test.dependencies:
+            print("found a dep " + str(test))
+            test(self.parser, self.resource)
         for result in test(self.parser, self.resource):
             result.resource = self.resource
             result.executor = self

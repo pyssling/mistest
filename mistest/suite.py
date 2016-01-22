@@ -187,8 +187,58 @@ def validate_ordering(ordering):
     return ordering.lower()
 
 def parse_yaml_tests(yaml_tests, dir, parent, sequence):
+    """
+    Parse a list of tests from the parsed yaml
+
+    dir is the directory containing the tests
+    parent is the parent suite
+    sequence is the number of the test within the suite
+    """
+
     if not isinstance(yaml_tests, list):
-        raise SuiteParseException("Expected a list of dependencies")
+        raise SuiteParseException("Expected a list of tests")
+
+    tests = []
+
+    for test in yaml_tests:
+
+        arguments = None
+
+        if isinstance(test, str):
+            pass
+        elif isinstance(test, dict):
+            test_dict = test
+            test, parameters = test_dict.popitem()
+            if 'arguments' in parameters:
+                arguments = parameters['arguments']
+
+        else:
+            raise SuiteParseException("Unexpected test format")
+
+        test = os.path.normpath(dir + "/" + test)
+
+        if looks_like_a_suite(test):
+            tests.append(parse_yaml_suite(test, parent, sequence))
+        elif case.looks_like_a_case(test):
+            tests.append(case.Case(test, parent, sequence))
+        else:
+            raise SuiteParseException(test + " does not appear to be a case or a suite")
+
+        sequence = sequence + 1
+
+    return (tests, sequence)
+
+def parse_yaml_deps(yaml_tests, dir, parent, sequence):
+    """
+    Parse a list of dependencies from the parsed yaml
+
+    dir is the directory containing the tests
+    parent is the parent suite
+    sequence is the number of the test within the suite
+    """
+
+    if not isinstance(yaml_tests, list):
+        raise SuiteParseException("Expected a list of tests")
 
     tests = []
 
@@ -221,6 +271,13 @@ def parse_yaml_tests(yaml_tests, dir, parent, sequence):
     return (tests, sequence)
 
 def parse_yaml_suite(file, parent, sequence):
+    """
+    Parse a yaml suite recursively.
+
+    parent is the parent suite,
+    sequence is the number of the test within the parent suite
+    """
+
     name = os.path.normpath(file)
     dir = os.path.dirname(file)
     ordering = None
@@ -257,6 +314,7 @@ def parse_yaml_suite(file, parent, sequence):
         suite.append_test(test)
 
     for dep in dependencies:
+        print("appending dep " + str(dep))
         suite.append_dep(dep)
 
     return suite
