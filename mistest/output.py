@@ -14,9 +14,9 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-from tap import *
-from case import *
-from xml.etree.ElementTree import *
+from tap import Tap
+from case import CaseExecutionResult
+from xml.etree.ElementTree import Element,ElementTree
 
 class Output:
     """The output class

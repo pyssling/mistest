@@ -15,10 +15,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import queue
-from case import *
-from executor import *
-from tap import *
-from test import *
+from executor import Executor
+from test import TestExecutionResult
 
 class Scheduler:
 

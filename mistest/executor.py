@@ -16,8 +16,7 @@
 
 import threading
 import queue
-from suite import *
-from case import *
+from test import Test
 import tap
 
 class ExecutorMessage:

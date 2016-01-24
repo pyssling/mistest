@@ -14,12 +14,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import logging
 import os
 import subprocess
-from tap import *
+from tap import TestLine
 from xml.etree.ElementTree import Element
-from test import *
+from test import Test,TestResult,TestExecutionResult
 
 class CaseNotExecutable(Exception):
     """Test case is not executable"""

@@ -14,12 +14,11 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
-import io
 import yaml
 import os
 import case
 from xml.etree.ElementTree import Element
-from test import *
+from test import Test,TestResult,TestExecutionResult
 
 class SuiteExecutionResult(TestExecutionResult):
     """The result of a test case execution run"""

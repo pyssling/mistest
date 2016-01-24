@@ -16,12 +16,10 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import argparse
-import copy
-import os
 import sys
 import case
 import suite
-from scheduler import *
+from scheduler import Scheduler
 from output import Output
 
 def parse_separated(resources_and_tests):
