@@ -18,7 +18,8 @@ import yaml
 import os
 import case
 from xml.etree.ElementTree import Element
-from test import Test,TestResult,TestExecutionResult
+from test import Test, TestResult, TestExecutionResult
+
 
 class SuiteExecutionResult(TestExecutionResult):
     """The result of a test case execution run"""
@@ -30,6 +31,7 @@ class SuiteExecutionResult(TestExecutionResult):
     def append(self, execution_result):
         self.execution_results.append(execution_result)
 
+
 class SuiteResult(TestResult):
     """The aggregated result of a test suite"""
 
@@ -39,11 +41,12 @@ class SuiteResult(TestResult):
         self.test_results = test_results
 
         for result in test_results:
-            if result.ok == False:
+            if not result.ok:
                 self.ok = False
 
     def __str__(self):
-        return ("ok" if self.ok else "not ok") + " " + str(self.suite.sequence) + " - " + str(self.suite)
+        return (("ok" if self.ok else "not ok") + " " +
+                str(self.suite.sequence) + " - " + str(self.suite))
 
     def junit(self):
         element = Element('testsuite')
@@ -64,6 +67,7 @@ class Directives:
 
     def __init__(self, directives_list):
         pass
+
 
 class Suite(Test):
     """A test suite parser
@@ -123,7 +127,7 @@ class Suite(Test):
         return junit_name
 
     def generate_result(self):
-        test_results = [ test.generate_result() for test in self.test_list ]
+        test_results = [test.generate_result() for test in self.test_list]
         self.result = SuiteResult(self, test_results)
         return self.result
 
@@ -164,28 +168,33 @@ class Suite(Test):
     def __str__(self):
         return self.name
 
+
 def looks_like_a_suite(file):
     if file.endswith(".yaml") and os.path.isfile(file):
         return True
     else:
         return False
 
+
 class SuiteParseException(Exception):
     """Failed to create a suite instance"""
     pass
+
 
 class SubSuiteException(Exception):
     """Failed to parse an included suite"""
     pass
 
+
 def validate_ordering(ordering):
     if not isinstance(ordering, str):
         raise SuiteParseException("Expected a scalar string as ordering")
-    if not ordering.lower() in [ 'sequential', 'any' ]:
+    if not ordering.lower() in ['sequential', 'any']:
         raise SuiteParseException("Unknown ordering " + ordering)
     return ordering.lower()
 
-def parse_yaml_tests(yaml_tests, dir, parent, sequence):
+
+def parse_yaml_tests(yaml_tests, dir, parent, sequence, dependencies=[]):
     """
     Parse a list of tests from the parsed yaml
 
@@ -203,13 +212,15 @@ def parse_yaml_tests(yaml_tests, dir, parent, sequence):
 
         arguments = None
 
+        # Tests are either a single entry in yaml, or they are multiple entries
+        # inside a dict where the key is the path to the test-case.
         if isinstance(test, str):
             pass
         elif isinstance(test, dict):
             test_dict = test
             test, parameters = test_dict.popitem()
             if 'arguments' in parameters:
-                arguments = parameters['arguments']
+                arguments = parameters['arguments'].split(' ')
 
         else:
             raise SuiteParseException("Unexpected test format")
@@ -217,59 +228,21 @@ def parse_yaml_tests(yaml_tests, dir, parent, sequence):
         test = os.path.normpath(dir + "/" + test)
 
         if looks_like_a_suite(test):
-            tests.append(parse_yaml_suite(test, parent, sequence))
+            tests.append(parse_yaml_suite(test, parent, sequence,
+                                          dependencies))
         elif case.looks_like_a_case(test):
-            tests.append(case.Case(test, parent, sequence))
+            tests.append(case.Case(test, parent, sequence, arguments,
+                                   dependencies))
         else:
-            raise SuiteParseException(test + " does not appear to be a case or a suite")
+            raise SuiteParseException(test + " does not appear to be a \
+                                      case or a suite")
 
         sequence = sequence + 1
 
     return (tests, sequence)
 
-def parse_yaml_deps(yaml_tests, dir, parent, sequence):
-    """
-    Parse a list of dependencies from the parsed yaml
 
-    dir is the directory containing the tests
-    parent is the parent suite
-    sequence is the number of the test within the suite
-    """
-
-    if not isinstance(yaml_tests, list):
-        raise SuiteParseException("Expected a list of tests")
-
-    tests = []
-
-    for test in yaml_tests:
-
-        arguments = None
-
-        if isinstance(test, str):
-            pass
-        elif isinstance(test, dict):
-            test_dict = test
-            test, parameters = test_dict.popitem()
-            if 'arguments' in parameters:
-                arguments = parameters['arguments']
-
-        else:
-            raise SuiteParseException("Unexpected test format")
-
-        test = os.path.normpath(dir + "/" + test)
-
-        if looks_like_a_suite(test):
-            tests.append(parse_yaml_suite(test, parent, sequence))
-        elif case.looks_like_a_case(test):
-            tests.append(case.Case(test, parent, sequence))
-        else:
-            raise SuiteParseException(test + " does not appear to be a case or a suite")
-
-        sequence = sequence + 1
-
-    return (tests, sequence)
-
-def parse_yaml_suite(file, parent, sequence):
+def parse_yaml_suite(file, parent, sequence, dependencies=[]):
     """
     Parse a yaml suite recursively.
 
@@ -277,10 +250,7 @@ def parse_yaml_suite(file, parent, sequence):
     sequence is the number of the test within the parent suite
     """
 
-    name = os.path.normpath(file)
     dir = os.path.dirname(file)
-    ordering = None
-    dependencies = []
     tests = []
     child_sequence = 1
 
@@ -296,15 +266,22 @@ def parse_yaml_suite(file, parent, sequence):
         suite.ordering = validate_ordering(suite_dict.pop('ordering'))
 
     if 'dependencies' in suite_dict:
-        (dependencies, child_sequence) = parse_yaml_tests(suite_dict.pop('dependencies'),
-                                                          dir, suite, child_sequence)
+        # Dependencies are always parsed without any dependencies of their own.
+        (suite_dependencies, child_sequence) = \
+            parse_yaml_tests(suite_dict.pop('dependencies'), dir, suite,
+                             child_sequence)
+        # The total dependency list for a suite is always that of the suite
+        # and that of the parent.
+        dependencies += suite_dependencies
 
     if 'tests':
-        (tests, child_sequence) = parse_yaml_tests(suite_dict.pop('tests'),
-                                                   dir, suite, child_sequence)
+        (tests, child_sequence) = \
+            parse_yaml_tests(suite_dict.pop('tests'),
+                             dir, suite, child_sequence, dependencies)
 
     if len(suite_dict) != 0:
-        raise SuiteParseException("Unknown elements in suite: ", map(str, suite_dict.keys()))
+        raise SuiteParseException("Unknown elements in suite: ",
+                                  map(str, suite_dict.keys()))
 
     if not tests:
         raise SuiteParseException("Suite did not contain any tests")
@@ -313,7 +290,6 @@ def parse_yaml_suite(file, parent, sequence):
         suite.append_test(test)
 
     for dep in dependencies:
-        print("appending dep " + str(dep))
         suite.append_dep(dep)
 
     return suite

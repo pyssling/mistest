@@ -17,6 +17,7 @@
 import queue
 from executor import Executor
 from test import TestExecutionResult
+import logging
 
 class Scheduler:
 
@@ -79,6 +80,7 @@ class Scheduler:
         # Run all the tests
         for test in self.suite:
             free_resources = self.get_free_resources()
+            logging.debug("Scheduling %s on %s" % (str(test), str(free_resources[0])))
             self.schedule_test(free_resources[0], test)
 
         # Wait for all the resources to become free

@@ -21,6 +21,8 @@ import case
 import suite
 from scheduler import Scheduler
 from output import Output
+import logging
+
 
 def parse_separated(resources_and_tests):
     top_level_suite = suite.Suite(name="Top level suite")
@@ -42,6 +44,7 @@ def parse_separated(resources_and_tests):
         sequence = sequence + 1
 
     return (resources, top_level_suite)
+
 
 def parse_unseparated(resources_and_tests):
     top_level_suite = suite.Suite(name="Top level suite")
@@ -71,6 +74,7 @@ def parse_unseparated(resources_and_tests):
 
     return (resources, top_level_suite)
 
+
 def parse_mistest_args(argv):
 
     parser = argparse.ArgumentParser(description='Execute a mistest run.')
@@ -80,13 +84,19 @@ def parse_mistest_args(argv):
                         choices=['-'], help='Resource and test separator')
     parser.add_argument('test', nargs='+', help='A suite or test case.')
     parser.add_argument('--immediate-output', action='store_true',
-                        help='Print output immediately, even during parallel execution')
+                        help='Print output immediately, \
+                        even during parallel execution')
     parser.add_argument('--junit-xml', '-x', help='Generate a junit xml file')
     parser.add_argument('--jobs', '-j', nargs='?', type=int,
                         default=1, help='Number of parallel local jobs to run')
-
+    parser.add_argument('--debug', '-d', help='Enable debug logging',
+                        action='store_true')
 
     args = parser.parse_args(argv[1:])
+
+    # Enable debug logging if set
+    if args.debug:
+        logging.basicConfig(level=logging.DEBUG)
 
     # The resource/suite division is a fake, python will accumulate all values
     # but the last in resource, so post-parsing is needed.

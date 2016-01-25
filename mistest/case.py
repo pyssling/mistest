@@ -16,9 +16,10 @@
 
 import os
 import subprocess
-from tap import TestLine
+from tap import TestLine, Tap, Plan, Diagnostic
 from xml.etree.ElementTree import Element
-from test import Test,TestResult,TestExecutionResult
+from test import Test, TestResult, TestExecutionResult
+
 
 class CaseNotExecutable(Exception):
     """Test case is not executable"""
@@ -33,7 +34,7 @@ class CaseExecutionResult(TestExecutionResult):
         self.tap_list = []
 
     def __len__(self):
-        if self.planned == None:
+        if self.planned is None:
             return 0
         else:
             return self.planned
@@ -66,6 +67,7 @@ class CaseInconsistentPlan(Exception):
     """Test case has inconsisten plane"""
     pass
 
+
 class CaseTestLineAggregate(Tap):
     """A TAP test line aggregate
 
@@ -76,7 +78,8 @@ class CaseTestLineAggregate(Tap):
     def __init__(self, number, test_lines):
         """Initialize by aggregating the test lines
 
-        Some aggregation is deffered such as creating string representations."""
+        Some aggregation is deffered such as creating string representations.
+        """
         self.number = number
         self.test_lines = test_lines
         self.description = None
@@ -87,7 +90,7 @@ class CaseTestLineAggregate(Tap):
         todo_count = 0
         for line in test_lines:
             # A single not ok makes everything not ok
-            if line.ok == False:
+            if not line.ok:
                 self.ok = False
 
             # Accumulate directives
@@ -155,7 +158,7 @@ class CaseResult(TestResult):
 
         if len(self.tap_aggregate_list) != len(self):
             for i in range(1, len(self) + 1):
-                test_lines = [ result[i] for result in self.execution_results ]
+                test_lines = [result[i] for result in self.execution_results]
                 test_lines_aggregate = CaseTestLineAggregate(i, test_lines)
                 self.tap_aggregate_list.append(test_lines_aggregate)
 
@@ -172,13 +175,15 @@ class CaseResult(TestResult):
     def append(self, execution_result):
         self.execution_results.append(execution_result)
 
+
 class Case(Test):
     """A test case
 
     Will fork and execute a provided test case, parsing the stdout during
     execution."""
 
-    def __init__(self, file, parent, sequence, arguments=[], environment=None, name=None):
+    def __init__(self, file, parent, sequence, arguments=[], dependencies=[],
+                 environment=None, name=None):
 
         Test.__init__(self)
 
@@ -191,7 +196,8 @@ class Case(Test):
             name = file
 
         self.file = file
-        self.arguments = arguments
+        self.arguments = arguments if arguments else []
+        self.dependencies = dependencies
         self.environment = environment
         self.name = name
         self.popen = None
@@ -205,7 +211,7 @@ class Case(Test):
 
     def __call__(self, parser, resource):
 
-        command = [ self.file ] + self.arguments
+        command = [self.file] + self.arguments
 
         popen = subprocess.Popen(command, stdout=subprocess.PIPE,
                                  env=self.environment)
@@ -215,7 +221,8 @@ class Case(Test):
         result = CaseExecutionResult(self)
 
         # Create a tap Diagnostic to inform which test case has started
-        yield Diagnostic("Running test case: \"" + self.name + "\" on " + resource)
+        yield Diagnostic("Running test case: \"" + self.name + "\" on "
+                         + resource)
 
         try:
             for tap_output in parser:
@@ -270,13 +277,13 @@ class Case(Test):
 
         return junit_name
 
-
     def __iter__(self):
         for execution_result in self.execution_results:
             yield execution_result
 
     def __len__(self):
         return len(self.execution_results)
+
 
 def looks_like_a_case(file):
     if os.access(file, os.X_OK):

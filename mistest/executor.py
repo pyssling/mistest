@@ -19,6 +19,7 @@ import queue
 from test import Test
 import tap
 
+
 class ExecutorMessage:
     """A communication message to or from the executor"""
 
@@ -28,9 +29,15 @@ class ExecutorMessage:
     def __str__(self):
         return "Executor Message: " + self.__class__.__name__
 
+
 class TerminateExecutor(ExecutorMessage):
     """Executor should terminate"""
     pass
+
+
+class UnknownExecutorMessage(Exception):
+    pass
+
 
 class Executor(threading.Thread):
     """An executor of test cases and suites
@@ -46,6 +53,7 @@ class Executor(threading.Thread):
         self.test_queue = queue.Queue()
         self.result_queue = result_queue
         self.parser = tap.Parser()
+        self.completed_dependencies = []
 
     def queue(self, test_or_message):
         self.test_queue.put(test_or_message)
@@ -56,22 +64,36 @@ class Executor(threading.Thread):
     def __str__(self):
         return self.resource
 
-    def __execute_test(self, test):
-        print("test dependencies len: " + str(len(test.dependencies)))
-        for test in test.dependencies:
-            print("found a dep " + str(test))
-            test(self.parser, self.resource)
-        for result in test(self.parser, self.resource):
-            result.resource = self.resource
-            result.executor = self
-            self.result_queue.put(result)
+    def queue_result(self, result):
+        result.resource = self.resource
+        result.executor = self
+        self.result_queue.put(result)
 
     def run(self):
         while True:
-            test_or_message = self.test_queue.get()
+            message = self.test_queue.get()
 
-            if isinstance(test_or_message, Test):
-                self.__execute_test(test_or_message)
-
-            elif isinstance(test_or_message, TerminateExecutor):
+            # Early exit of the loop on a terminate message
+            if isinstance(message, TerminateExecutor):
                 break
+
+            if not isinstance(message, Test):
+                raise UnknownExecutorMessage("Unknown message of type " +
+                                             str(type(message)))
+            else:
+                test = message
+
+            # Execute dependencies and then the actual test
+            for dep in test.dependencies:
+
+                # Only run dependencies if they have not already been run.
+                if dep in self.completed_dependencies:
+                    continue
+                else:
+                    self.completed_dependencies.append(dep)
+
+                for result in dep(self.parser, self.resource):
+                    self.queue_result(result)
+
+            for result in test(self.parser, self.resource):
+                self.queue_result(result)

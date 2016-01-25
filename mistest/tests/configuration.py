@@ -1,4 +1,4 @@
 #!/usr/bin/python
 
-print("0..1")
-print("ok 1 - installed")
+print("1..1")
+print("ok 1 - configured")
