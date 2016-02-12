@@ -43,8 +43,6 @@ class Scheduler:
             self.output(result)
 
             if isinstance(result, TestExecutionResult):
-                #result.collate()
-
                 resource = str(result.executor)
                 if result.test == self.scheduled_tests[resource]:
                     self.scheduled_tests[resource] = None
@@ -57,7 +55,7 @@ class Scheduler:
         # First see if there are any free resources without scheduled tests
         free_resources = []
         for resource in self.resources:
-            if self.scheduled_tests[resource] == None:
+            if self.scheduled_tests[resource] is None:
                 free_resources.append(resource)
 
         if len(free_resources) > 0:

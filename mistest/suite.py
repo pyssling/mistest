@@ -86,18 +86,21 @@ class Suite(Test):
         Test.__init__(self)
 
         self.name = name
-        self.dependencies = []
         self.directives = []
         self.test_list = []
         self.parent = parent
         self.sequence = sequence
         self.ordering = 'sequential'
 
+    def __eq__(self, other):
+        return (self.name == other.name and
+                self.dependencies == other.dependencies and
+                self.directives == self.directives and
+                self.test_list == self.test_list and
+                self.ordering == self.ordering)
+
     def append_test(self, test):
         self.test_list.append(test)
-
-    def append_dep(self, test):
-        self.dependencies.append(test)
 
     def set_ordering(self, ordering):
         self.ordering = ordering
@@ -156,10 +159,11 @@ class Suite(Test):
     def __iter__(self):
         for test in self.test_list:
             # Only suites have ordering
-            if test.ordering == 'any':
-                for suite_test in test:
-                    yield suite_test
-            else:
+            try:
+                if test.ordering == 'any':
+                    for suite_test in test:
+                        yield suite_test
+            except AttributeError:
                 yield test
 
     def __len__(self):

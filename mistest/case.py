@@ -197,13 +197,21 @@ class Case(Test):
 
         self.file = file
         self.arguments = arguments if arguments else []
-        self.dependencies = dependencies
         self.environment = environment
         self.name = name
         self.popen = None
         self.parent = parent
         self.execution_results = []
         self.sequence = sequence
+
+        for test in dependencies:
+            self.append_dep(test)
+
+    def __eq__(self, other):
+        return (self.name == other.name and
+                self.file == other.file and
+                self.environment == other.environment and
+                Test.__eq__(self, other))
 
     def generate_result(self):
         self.result = CaseResult(self, self.execution_results)

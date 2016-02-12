@@ -58,9 +58,12 @@ class Test:
 
     A general form for other test classes to inherit"""
 
-    # Global dependency dict to look up already parsed dependencies.
-    dependencies = {}
-
     def __init__(self):
-        self.ordering = None
         self.dependencies = []
+
+    def __eq__(self, other):
+        return self.dependencies == other.dependencies
+
+    def append_dep(self, test):
+        if not test in self.dependencies:
+            self.dependencies.append(test)

@@ -18,6 +18,7 @@ import threading
 import queue
 from test import Test
 import tap
+import logging
 
 
 class ExecutorMessage:
@@ -75,13 +76,17 @@ class Executor(threading.Thread):
 
             # Early exit of the loop on a terminate message
             if isinstance(message, TerminateExecutor):
+                logging.debug("Executor " + self.resource + " terminating")
                 break
 
+            # Throw an exception in case of unknown messages.
             if not isinstance(message, Test):
+                logging.debug("Executor " + self.resource + " unknown message")
                 raise UnknownExecutorMessage("Unknown message of type " +
                                              str(type(message)))
-            else:
-                test = message
+
+            logging.debug("Executor " + self.resource + " got a test")
+            test = message
 
             # Execute dependencies and then the actual test
             for dep in test.dependencies:

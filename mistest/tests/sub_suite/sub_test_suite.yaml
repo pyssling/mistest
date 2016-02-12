@@ -1,4 +1,7 @@
 Ordering: sequential
+Dependencies:
+   - ../installation.py
+   - ../configuration.py
 Tests:
    - another_test_case.py:
         arguments: -y
