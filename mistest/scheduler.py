@@ -48,7 +48,6 @@ class Scheduler:
                     self.scheduled_tests[resource] = None
                     return resource
 
-
     def get_free_resources(self):
         """Get a list of free resources available to this scheduler"""
 

@@ -14,28 +14,30 @@
 # You should have received a copy of the GNU General Public License
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
+
 class TestResult:
     """A test result template class
 
     A general form for other test result classes to inherit."""
 
-    def __init__(self, test):
+    def __init__(self, test, planned=None, ran=0, ok=0, not_ok=0, skip=0,
+                 todo=0, failed=None):
         """Initialize the TestExecutionResult
 
         Initialization takes as argument the test that created the result."""
         self.test = test
-        self.planned = None
-        self.ran = 0
-        self.ok = 0
-        self.not_ok = 0
-        self.skip = 0
-        self.todo = 0
-        self.failed = None
+        self.planned = planned
+        self.ran = ran
+        self.ok = ok
+        self.not_ok = not_ok
+        self.skip = skip
+        self.todo = todo
+        self.failed = failed
 
     def __str__(self):
         result = "# "
         if self.failed:
-            return "# failed: " + str(self.failed)
+            return "# Failed: " + str(self.failed)
 
         if self.planned is not None:
             result += "planned: " + str(self.planned) + " "
@@ -44,6 +46,16 @@ class TestResult:
         result += "skip: " + str(self.skip) + " "
         result += "todo: " + str(self.todo) + " "
         return result
+
+    def __eq__(self, other):
+        return (self.test == other.test and
+                self.planned == other.planned and
+                self.ran == other.ran and
+                self.ok == other.ok and
+                self.not_ok == other.not_ok and
+                self.skip == other.skip and
+                self.todo == other.todo and
+                self.failed == other.failed)
 
 
 class TestExecutionResult(TestResult):

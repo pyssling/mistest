@@ -1,3 +1,4 @@
+#!/usr/bin/python3
 #
 # Copyright 2014 Nils Carlson
 #
@@ -16,9 +17,10 @@
 
 import os
 import subprocess
-from tap import TestLine, Tap, Plan, Diagnostic
+from tap import TestLine, Tap, Plan, Diagnostic, Parser
 from xml.etree.ElementTree import Element
 from test import Test, TestResult, TestExecutionResult
+import unittest
 
 
 class CaseNotExecutable(Exception):
@@ -29,8 +31,10 @@ class CaseNotExecutable(Exception):
 class CaseExecutionResult(TestExecutionResult):
     """The result of a test case execution run"""
 
-    def __init__(self, case):
-        TestExecutionResult.__init__(self, case)
+    def __init__(self, case, planned=None, ran=0, ok=0, not_ok=0, skip=0,
+                 todo=0, failed=None):
+        TestExecutionResult.__init__(self, case, planned, ran, ok, not_ok,
+                                     skip, todo, failed)
         self.tap_list = []
 
     def __len__(self):
@@ -58,6 +62,10 @@ class CaseExecutionResult(TestExecutionResult):
         for tap in self.tap_list:
             if isinstance(tap, TestLine):
                 yield tap
+
+    def __eq__(self, other):
+        return (TestExecutionResult.__eq__(self, other) and
+                self.tap_list == other.tap_list)
 
     def append(self, tap):
         self.tap_list.append(tap)
@@ -258,7 +266,10 @@ class Case(Test):
                 yield tap_output
 
         except Exception as e:
+            popen.kill()
             result.failed = str(e)
+        finally:
+            popen.stdout.close()
 
         self.execution_results.append(result)
 
@@ -299,41 +310,105 @@ def looks_like_a_case(file):
     else:
         return False
 
+
+# Misleading name, this tests the Case class.
+class TestMistestCase(unittest.TestCase):
+
+    def setUp(self):
+        self.parser = Parser()
+
+    def run_case(self, tap_str, expected_result):
+        case = Case("/bin/echo", None, 1, arguments=['-en', tap_str])
+        expected_result.test = case
+        # Get results until we get the case execution result
+        for result in case(self.parser, "local"):
+            continue
+
+        self.assertEqual(expected_result, result)
+
+    def test_4_ok(self):
+        expected_result = CaseExecutionResult(None, planned=4, ran=4, ok=4)
+        expected_result.tap_list = [Plan(4, 'all of them'),
+                                    TestLine(True, 1),
+                                    TestLine(True, 2),
+                                    TestLine(True, 3),
+                                    TestLine(True, 4)]
+        self.run_case("1..4 # all of them\n"
+                      "ok\n"
+                      "ok\n"
+                      "ok\n"
+                      "ok",
+                      expected_result)
+
+    def test_3rd_nok(self):
+        expected_result = CaseExecutionResult(None, planned=3, ran=3, ok=2,
+                                              not_ok=1)
+        expected_result.tap_list = \
+            [Plan(3),
+             TestLine(True, 1, description="Hello"),
+             TestLine(True, 2, description="drat"),
+             TestLine(False, 3, description="Sometimes")]
+
+        self.run_case("1..3\n"
+                      "ok 1 Hello\n"
+                      "ok 2 drat\n"
+                      "not ok Sometimes\n", expected_result)
+
+    def test_skip(self):
+        expected_result = CaseExecutionResult(None, ran=1, ok=1, todo=1)
+        expected_result.tap_list = \
+            [TestLine(True, 1, directive="TODO",
+             directive_description="the directive")]
+        self.run_case("ok # ToDo the directive", expected_result)
+
+    def test_not_ok_skip(self):
+        expected_result = CaseExecutionResult(None, ran=1, ok=0,
+                                              not_ok=1, skip=1)
+        expected_result.tap_list = [TestLine(False, 1, directive="SKIP")]
+        self.run_case("not ok # skip", expected_result)
+
+    def not_tap(self):
+        expected_result = \
+            CaseExecutionResult(None,
+                                failed='Non-TAP input was encountered: '
+                                '"a wtf"')
+        self.run_case("a wtf", expected_result)
+
+    def test_bad_plan_too_many(self):
+        expected_result = \
+            CaseExecutionResult(None, planned=1, ran=1, ok=1,
+                                failed="Number of planned tests (1) exceeded")
+        expected_result.tap_list = [Plan(1), TestLine(True, 1)]
+        self.run_case("1..1\n"
+                      "ok 1\n"
+                      "ok 2\n", expected_result)
+
+    def test_bad_plan_too_few(self):
+        expected_result = \
+            CaseExecutionResult(None, planned=3, ran=2, ok=2,
+                                failed="Number of executed tests (2)"
+                                " less than the number of planned (3)")
+        expected_result.tap_list = [Plan(3),
+                                    TestLine(True, 1),
+                                    TestLine(True, 2)]
+        self.run_case("1..3\n"
+                      "ok 1\n"
+                      "ok 2\n", expected_result)
+
+    def test_bad_order(self):
+        expected_result = \
+            CaseExecutionResult(None, ran=1, ok=1,
+                                failed='Unexpected test number 3 expecting 2')
+        expected_result.tap_list = [TestLine(True, 1)]
+        self.run_case("ok\n"
+                      "ok 3\n", expected_result)
+
+    def test_bail_out(self):
+        expected_result = \
+            CaseExecutionResult(None, failed='Bail out!')
+        self.run_case("Bail out!", expected_result)
+
 # Self test by forking off a child which will print the test output.
 if __name__ == '__main__':
-    import sys
 
-    if len(sys.argv) > 1 and sys.argv[1] == "child":
-        print(sys.argv[2].strip())
-        quit()
-
-    def __run_self_test(tap_str):
-        case = Case(["python3.3", __file__, "child", tap_str])
-        case.execute()
-
-
-    # Test 1
-    plan = __run_self_test("1..4 # all of them\nok\nok\nok\nok")
-
-    ok2 = __run_self_test("1..1\n" \
-                            "ok 1\n" \
-                            "ok 2\n")
-
-    not_ok3 = __run_self_test("1..3\n" \
-                                "ok 1 Hello\n" \
-                                "ok 2 drat\n" \
-                                "not ok Sometimes\n")
-
-    ok_todo = __run_self_test("ok # ToDo the directive")
-
-    not_ok_skip = __run_self_test("not ok # skip")
-
-    not_tap = __run_self_test("a wtf")
-
-    numbering_error = __run_self_test("ok\n" \
-                                            "ok 3\n")
-    plan_error = __run_self_test("1..1\n" \
-                                       "ok\n" \
-                                       "not ok\n")
-    bail_out = __run_self_test("Bail out!")
-
+    unittest.main()

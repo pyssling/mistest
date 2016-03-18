@@ -19,9 +19,12 @@ import re
 import ply.lex as lex
 import ply.yacc as yacc
 from xml.etree.ElementTree import Element
+import unittest
+
 
 class Tap:
     pass
+
 
 # Tap output classes
 class Plan(Tap):
@@ -30,7 +33,7 @@ class Plan(Tap):
     Contains the number of planned tests as well
     as a possible diagnostic of the Diagnostic class"""
 
-    def __init__(self, number, diagnostic):
+    def __init__(self, number, diagnostic=None):
         self.number = number
         self.diagnostic = diagnostic
 
@@ -41,10 +44,14 @@ class Plan(Tap):
 
         return plan
 
+    def __eq__(self, other):
+        return (self.number == other.number and
+                self.diagnostic == other.diagnostic)
+
     def junit(self):
         element = Element('system-err')
-
         return element
+
 
 class TestLine(Tap):
     """A TAP test line
@@ -53,8 +60,8 @@ class TestLine(Tap):
     a number which is the test number in the sequence,
     a description and a directive and directive description."""
 
-    def __init__(self, ok, number, description, \
-                 directive, directive_description):
+    def __init__(self, ok, number, description=None,
+                 directive=None, directive_description=None):
         self.ok = ok
         self.number = number
         self.description = description
@@ -75,6 +82,13 @@ class TestLine(Tap):
 
         return test_line
 
+    def __eq__(self, other):
+        return (self.ok == other.ok and
+                self.number == other.number and
+                self.description == other.description and
+                self.directive == other.directive and
+                self.directive_description == other.directive_description)
+
     def junit(self):
         element = Element('testcase')
         element.attrib['name'] = str(self)
@@ -84,6 +98,7 @@ class TestLine(Tap):
             element.append(failed)
 
         return element
+
 
 class Diagnostic(Tap):
     """A TAP diagnostic
@@ -101,10 +116,12 @@ class Diagnostic(Tap):
 
         return element
 
+
 # Tap error classes
 class NumberingError(Exception):
     """Raised when tests are not executed with the correct ordering"""
     pass
+
 
 class BailOutError(Exception):
     """Raised when a 'Bail out!' occurs"""
@@ -119,6 +136,7 @@ class BailOutError(Exception):
 
         return bail_out_line
 
+
 class NotTapError(Exception):
     """Non-TAP input was encountered"""
 
@@ -128,9 +146,11 @@ class NotTapError(Exception):
     def __str__(self):
         return "Non-TAP input was encountered: \"" + self.non_tap + "\""
 
+
 class PlanError(Exception):
     """The number of tests did not match the plan"""
     pass
+
 
 # Tap parser
 class Parser:
@@ -336,16 +356,19 @@ class Parser:
                      | HASH SKIP description
                      | """
         if len(p) > 3:
-            p[0] = { 'directive' : p[2].upper(), 'description' : p[3] }
+            p[0] = {'directive': p[2].upper(), 'description': p[3]}
         else:
-            p[0] = { 'directive' : None, 'description' : None }
+            p[0] = {'directive': None, 'description': None}
 
     def p_error(self, p):
-        raise NotTapError(p.value)
+        if p is None:
+            raise NotTapError('<empty-line>')
+        else:
+            raise NotTapError(p.value)
 
     def __init__(self):
-        self.lexer = lex.lex(module=self,debug=0)
-        self.parser = yacc.yacc(module=self,debug=0)
+        self.lexer = lex.lex(module=self, debug=0)
+        self.parser = yacc.yacc(module=self, debug=0)
 
     def __call__(self, input_stream):
         self.input_stream = input_stream
@@ -361,85 +384,94 @@ class Parser:
                 line = line.decode("utf-8")
             except:
                 pass
-            yield self.parser.parse(line,lexer=self.lexer,debug=0)
+            yield self.parser.parse(line, lexer=self.lexer, debug=0)
 
         if self.planned_number and self.test_number < self.planned_number:
-            raise PlanError("Number of executed tests (" + str(self.test_number)
+            raise PlanError("Number of executed tests (" +
+                            str(self.test_number)
                             + ") less than the number of planned (" +
                             str(self.planned_number) + ")")
 
 
-if __name__ == '__main__':
+class TestParser(unittest.TestCase):
 
-    def __run_self_test(tap_str):
+    def run_parser(self, tap_str):
         f = io.StringIO(tap_str)
-        p = Parser(f)
+        p = Parser()
+        p(f)
         last_tap = None
         for tap in p:
             last_tap = tap
 
         return last_tap
 
-    # Test 1
-    plan = __run_self_test("1..0 # all of them\n")
-    assert plan.number == 0
-    assert plan.diagnostic == "all of them"
+    def test_plan(self):
+        plan = self.run_parser("1..0 # all of them\n")
+        self.assertEqual(plan.number, 0)
+        self.assertEqual(plan.diagnostic, "all of them")
 
-    ok2 = __run_self_test("1..2\n" \
-                            "ok 1\n" \
-                            "ok 2\n")
-    assert ok2.ok == True
-    assert ok2.number == 2
-    assert ok2.description == None
-    assert ok2.directive == None
-    assert ok2.directive_description == None
+    def test_2_ok(self):
+        ok2 = self.run_parser("1..2\n"
+                              "ok 1\n"
+                              "ok 2\n")
+        self.assertTrue(ok2.ok)
+        self.assertEqual(ok2.number, 2)
+        self.assertIsNone(ok2.description)
+        self.assertIsNone(ok2.directive)
+        self.assertIsNone(ok2.directive_description)
 
-    not_ok3 = __run_self_test("1..3\n" \
-                                "ok 1 Hello\n" \
-                                "ok 2 drat\n" \
-                                "not ok Sometimes\n")
-    assert not_ok3.ok == False
-    assert not_ok3.number == 3
-    assert not_ok3.description == "Sometimes"
-    assert not_ok3.directive == None
-    assert not_ok3.directive_description == None
+    def test_3_nok(self):
+        not_ok3 = self.run_parser("1..3\n"
+                                  "ok 1 Hello\n"
+                                  "ok 2 drat\n"
+                                  "not ok Sometimes\n")
+        self.assertFalse(not_ok3.ok)
+        self.assertEqual(not_ok3.number, 3)
+        self.assertEqual(not_ok3.description, "Sometimes")
+        self.assertIsNone(not_ok3.directive)
+        self.assertIsNone(not_ok3.directive_description)
 
-    ok_todo = __run_self_test("ok # ToDo the directive")
+    def test_todo(self):
+        ok_todo = self.run_parser("ok # ToDo the directive")
 
-    assert ok_todo.ok == True
-    assert ok_todo.number == 1
-    assert ok_todo.description == None
-    assert ok_todo.directive == "TODO"
-    assert ok_todo.directive_description == "the directive"
+        self.assertTrue(ok_todo.ok)
+        self.assertEqual(ok_todo.number, 1)
+        self.assertIsNone(ok_todo.description)
+        self.assertEqual(ok_todo.directive, "TODO")
+        self.assertEqual(ok_todo.directive_description, "the directive")
 
-    not_ok_skip = __run_self_test("not ok # skip")
+    def test_skip(self):
+        not_ok_skip = self.run_parser("not ok # skip")
 
-    assert not_ok_skip.ok == False
-    assert not_ok_skip.number == 1
-    assert not_ok_skip.description == None
-    assert not_ok_skip.directive == "SKIP"
-    assert not_ok_skip.directive_description == None
+        self.assertFalse(not_ok_skip.ok)
+        self.assertEqual(not_ok_skip.number, 1)
+        self.assertIsNone(not_ok_skip.description)
+        self.assertEqual(not_ok_skip.directive, "SKIP")
+        self.assertIsNone(not_ok_skip.directive_description)
 
-    try:
-        not_tap = __run_self_test("a wtf")
-    except NotTapError:
-        pass
+    def test_not_tap(self):
+        with self.assertRaises(NotTapError):
+            self.run_parser("a wtf")
 
-    try:
-        numbering_error = __run_self_test("ok\n" \
-                                            "ok 3\n")
-    except NumberingError:
-        pass
+    def test_numbering_error(self):
+        with self.assertRaises(NumberingError):
+            self.run_parser("ok\n"
+                            "ok 3\n")
 
+    def test_plan_error(self):
+        with self.assertRaises(PlanError):
+            self.run_parser("1..1\n"
+                            "ok\n"
+                            "not ok\n")
 
-    try:
-        plan_error = __run_self_test("1..1\n" \
-                                       "ok\n" \
-                                       "not ok\n")
-    except PlanError:
-        pass
+    def test_bail_out(self):
+        with self.assertRaises(BailOutError):
+            self.run_parser("Bail out!")
 
-    try:
-        bail_out = __run_self_test("Bail out!")
-    except BailOutError:
-        pass
+    def test_empty_line(self):
+        with self.assertRaises(NotTapError):
+            self.run_parser("\n")
+
+if __name__ == '__main__':
+
+    unittest.main()
