@@ -203,7 +203,13 @@ class Case(Test):
         if not name:
             name = file
 
-        self.file = file
+        # Handle files in the same directory
+        dir = os.path.dirname(file)
+        if (dir == ''):
+            self.file = './' + file
+        else:
+            self.file = file
+
         self.arguments = arguments if arguments else []
         self.environment = environment
         self.name = name

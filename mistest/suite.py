@@ -229,14 +229,15 @@ def parse_yaml_tests(yaml_tests, dir, parent, sequence, dependencies=[]):
         else:
             raise SuiteParseException("Unexpected test format")
 
-        test = os.path.normpath(dir + "/" + test)
+        # Handle suites in the same directory
+        if (dir != ''):
+            test = os.path.normpath(dir + "/" + test)
 
         if looks_like_a_suite(test):
             tests.append(parse_yaml_suite(test, parent, sequence,
                                           dependencies))
         elif looks_like_a_case(test):
-            tests.append(Case(test, parent, sequence, arguments,
-                                   dependencies))
+            tests.append(Case(test, parent, sequence, arguments, dependencies))
         else:
             raise SuiteParseException(test + " does not appear to be a \
                                       case or a suite")
