@@ -55,13 +55,17 @@ def parse_unseparated(resources_and_tests):
 
         # Test for suites or test cases.
         try:
-            if looks_like_a_suite(test_or_resource) \
-                    or looks_like_a_case(test_or_resource):
+            if looks_like_a_suite(test_or_resource):
                 parsed_suite = parse_yaml_suite(test_or_resource,
                                                 parent=top_level_suite,
                                                 sequence=sequence)
                 top_level_suite.append_test(parsed_suite)
                 args_are_resources = False
+                sequence = sequence + 1
+            elif looks_like_a_case(test_or_resource):
+                case = Case(test_or_resource, parent=top_level_suite,
+                            sequence=sequence)
+                top_level_suite.append_test(case)
                 sequence = sequence + 1
             elif args_are_resources:
                 resources.append(test_or_resource)
