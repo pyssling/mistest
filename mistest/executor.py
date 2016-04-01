@@ -16,8 +16,8 @@
 
 import threading
 import queue
-from test import Test
-import tap
+from .test import Test
+from .tap import Parser
 import logging
 
 
@@ -53,7 +53,7 @@ class Executor(threading.Thread):
         self.resource = resource
         self.test_queue = queue.Queue()
         self.result_queue = result_queue
-        self.parser = tap.Parser()
+        self.parser = Parser()
         self.completed_dependencies = []
 
     def queue(self, test_or_message):

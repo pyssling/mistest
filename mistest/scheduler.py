@@ -15,8 +15,8 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 import queue
-from executor import Executor
-from test import TestExecutionResult
+from .executor import Executor
+from .test import TestExecutionResult
 import logging
 
 class Scheduler:

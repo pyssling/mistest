@@ -16,9 +16,9 @@
 
 import yaml
 import os
-import case
+from .case import Case, looks_like_a_case
 from xml.etree.ElementTree import Element
-from test import Test, TestResult, TestExecutionResult
+from .test import Test, TestResult, TestExecutionResult
 
 
 class SuiteExecutionResult(TestExecutionResult):
@@ -234,8 +234,8 @@ def parse_yaml_tests(yaml_tests, dir, parent, sequence, dependencies=[]):
         if looks_like_a_suite(test):
             tests.append(parse_yaml_suite(test, parent, sequence,
                                           dependencies))
-        elif case.looks_like_a_case(test):
-            tests.append(case.Case(test, parent, sequence, arguments,
+        elif looks_like_a_case(test):
+            tests.append(Case(test, parent, sequence, arguments,
                                    dependencies))
         else:
             raise SuiteParseException(test + " does not appear to be a \

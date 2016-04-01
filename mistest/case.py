@@ -17,9 +17,9 @@
 
 import os
 import subprocess
-from tap import TestLine, Tap, Plan, Diagnostic, Parser
+from .tap import TestLine, Tap, Plan, Diagnostic, Parser
 from xml.etree.ElementTree import Element
-from test import Test, TestResult, TestExecutionResult
+from .test import Test, TestResult, TestExecutionResult
 import unittest
 
 
